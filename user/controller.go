@@ -9,13 +9,15 @@ import (
 	"net/http"
 	"net/mail"
 	"slices"
+	"strings"
 )
 
 type (
 	svc interface {
 		Register(ctx context.Context, args RegisterArgs) error
 		Login(ctx context.Context, args LoginArgs) (User, error)
-		GetAccessToken(ctx context.Context) (string, error)
+		GetAccessToken() (string, error)
+		CheckAccessToken(token string) bool
 	}
 
 	Controller struct {
@@ -99,7 +101,7 @@ func (c Controller) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := c.s.GetAccessToken(r.Context())
+	token, err := c.s.GetAccessToken()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -117,4 +119,96 @@ func (c Controller) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+type LoginReqBody struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func (l LoginReqBody) Validate() bool {
+	// email and name and password is not null
+	if slices.Contains([]string{l.Email, l.Password}, "") {
+		return false
+	}
+
+	// email should be in valid format
+	_, parseEmailErr := mail.ParseAddress(l.Email)
+	if parseEmailErr != nil {
+		return false
+	}
+
+	// password min length 5
+	if len(l.Password) < 5 {
+		return false
+	}
+
+	// password max length 15
+	if len(l.Password) > 15 {
+		return false
+	}
+
+	return true
+}
+
+func (c Controller) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	reqBody, err := web.DecodeReqBody[LoginReqBody](r.Body)
+	if errors.Is(err, web.ErrInvalidReqBody) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	u, err := c.s.Login(r.Context(), LoginArgs{
+		Email:    reqBody.Email,
+		Password: reqBody.Password,
+	})
+	if errors.Is(err, ErrInvalidPassword) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if errors.Is(err, ErrUserNotFound) {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	token, err := c.s.GetAccessToken()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := LoginResp{
+		Email:       reqBody.Email,
+		Name:        u.Name,
+		AccessToken: token,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(web.NewResTemplate("User logged successfully", resp))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("decoding user into json: %s", err.Error()), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (c Controller) AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		a := r.Header.Get("Authorization")
+
+		isValidToken := c.s.CheckAccessToken((strings.TrimPrefix(a, "Bearer ")))
+		if !isValidToken {
+			http.Error(w, "missing or expired access token", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

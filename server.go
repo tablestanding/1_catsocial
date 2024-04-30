@@ -2,7 +2,6 @@ package main
 
 import (
 	"catsocial/pkg/env"
-	"catsocial/pkg/jwt"
 	"catsocial/user"
 	"cmp"
 	"context"
@@ -42,11 +41,8 @@ func runServer() {
 	userSvc := user.NewService(userSQL, saltCount, jwtSecret)
 	userCtrl := user.NewController(userSvc)
 
-	token := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTQ1MTM5MjR9.m6tHDomfsAmy3dbWmpSA4zXpTSUQCpoDdPpC3efvL6w"
-	log.Println("is token valid")
-	log.Println(jwt.IsTokenValid(token, "secret"))
-
 	mux.Handle("POST /v1/user/register", http.HandlerFunc(userCtrl.RegisterHandler))
+	mux.Handle("POST /v1/user/login", http.HandlerFunc(userCtrl.LoginHandler))
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()

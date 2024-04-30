@@ -69,6 +69,10 @@ func (s Service) Login(ctx context.Context, args LoginArgs) (User, error) {
 	return u, nil
 }
 
-func (s Service) GetAccessToken(ctx context.Context) (string, error) {
+func (s Service) GetAccessToken() (string, error) {
 	return jwt.GenerateToken(8*time.Hour, s.jwtSecret)
+}
+
+func (s Service) CheckAccessToken(token string) bool {
+	return jwt.IsTokenValid(token, s.jwtSecret)
 }
