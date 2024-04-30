@@ -14,15 +14,12 @@ type (
 		Alg string `json:"alg"`
 		Typ string `json:"typ"`
 	}
-
-	Payload struct {
-		Exp int `json:"exp"`
-	}
 )
 
-func GenerateToken(duration time.Duration, secret string) (string, error) {
+func GenerateToken(duration time.Duration, secret string, p map[string]any) (string, error) {
 	header := []byte(`{"alg":"HS256","typ":"JWT"}`)
-	payload, err := json.Marshal(Payload{Exp: int(time.Now().Add(duration).Unix())})
+	p["exp"] = int(time.Now().Add(duration).Unix())
+	payload, err := json.Marshal(p)
 	if err != nil {
 		return "", err
 	}
@@ -35,11 +32,12 @@ func GenerateToken(duration time.Duration, secret string) (string, error) {
 	return headerAndPayload + "." + base64.RawURLEncoding.EncodeToString(signature), nil
 }
 
-func IsTokenValid(token string, secret string) bool {
+// IsTokenValid returns the token payload and boolean that will be true if the token is valid
+func IsTokenValid(token string, secret string) (map[string]any, bool) {
 	// jwt token must contain 3 elements separated by dot (.) header.payload.signature
 	elems := strings.Split(token, ".")
 	if len(elems) != 3 {
-		return false
+		return nil, false
 	}
 
 	headerAndPayload := elems[0] + "." + elems[1]
@@ -50,44 +48,48 @@ func IsTokenValid(token string, secret string) bool {
 	signature := hash.Sum(nil)
 	providedSignature, err := base64.RawURLEncoding.DecodeString(elems[2])
 	if err != nil {
-		return false
+		return nil, false
 	}
 	if !hmac.Equal(signature, providedSignature) {
-		return false
+		return nil, false
 	}
 
 	// parse header
 	headerStr, err := base64.RawURLEncoding.DecodeString(elems[0])
 	if err != nil {
-		return false
+		return nil, false
 	}
 	var h Header
 	err = json.Unmarshal(headerStr, &h)
 	if err != nil {
-		return false
+		return nil, false
 	}
 
 	// currently we only accept jwt token with alg HMAC SHA256 and type JWT
 	if h.Alg != "HS256" || h.Typ != "JWT" {
-		return false
+		return nil, false
 	}
 
 	// parse payload
 	payloadStr, err := base64.RawURLEncoding.DecodeString(elems[1])
 	if err != nil {
-		return false
+		return nil, false
 	}
-	var p Payload
+	var p map[string]any
 	err = json.Unmarshal(payloadStr, &p)
 	if err != nil {
-		return false
+		return nil, false
 	}
 
 	// check if payload exp already expires
-	exp := time.Unix(int64(p.Exp), 0)
-	if time.Now().After(exp) {
-		return false
+	exp, ok := p["exp"].(float64)
+	if !ok {
+		return nil, false
+	}
+	expTime := time.Unix(int64(exp), 0)
+	if time.Now().After(expTime) {
+		return nil, false
 	}
 
-	return true
+	return p, true
 }

@@ -26,18 +26,20 @@ func NewSQL(pool *pgxpool.Pool) SQL {
 	return SQL{pool}
 }
 
-func (s SQL) Create(ctx context.Context, args CreateUserRepoArgs) error {
-	_, err := s.pool.Exec(ctx, `
+func (s SQL) Create(ctx context.Context, args CreateUserRepoArgs) (string, error) {
+	var id string
+	err := s.pool.QueryRow(ctx, `
 		insert into users(name, hashed_pw, email)
 		values ($1, $2, $3)
-	`, args.Name, args.HashedPassword, args.Email)
+		returning id
+	`, args.Name, args.HashedPassword, args.Email).Scan(&id)
 
 	var e *pgconn.PgError
 	if errors.As(err, &e) && e.Code == "23505" { // unique constraint violation
-		return fmt.Errorf("sql create user: %w", ErrUniqueEmailViolation)
+		return "", fmt.Errorf("sql create user: %w", ErrUniqueEmailViolation)
 	}
 
-	return err
+	return id, err
 }
 
 func (s SQL) GetOneByEmail(ctx context.Context, email string) (User, error) {

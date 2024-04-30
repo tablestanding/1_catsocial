@@ -1,6 +1,7 @@
 package main
 
 import (
+	"catsocial/cat"
 	"catsocial/pkg/env"
 	"catsocial/user"
 	"cmp"
@@ -21,6 +22,8 @@ func runServer() {
 	dbPool := initDB()
 	defer dbPool.Close()
 
+	// === ENV VAR
+
 	port := ":" + cmp.Or(os.Getenv("PORT"), "5781")
 
 	saltCountString := env.MustLoad("BCRYPT_SALT")
@@ -31,11 +34,15 @@ func runServer() {
 
 	jwtSecret := env.MustLoad("JWT_SECRET")
 
+	// === HTTP MUX
+
 	mux := http.NewServeMux()
 
 	srv := &http.Server{}
 	srv.Addr = port
 	srv.Handler = mux
+
+	// === USER
 
 	userSQL := user.NewSQL(dbPool)
 	userSvc := user.NewService(userSQL, saltCount, jwtSecret)
@@ -43,6 +50,17 @@ func runServer() {
 
 	mux.Handle("POST /v1/user/register", http.HandlerFunc(userCtrl.RegisterHandler))
 	mux.Handle("POST /v1/user/login", http.HandlerFunc(userCtrl.LoginHandler))
+
+	// === CAT
+
+	catSQL := cat.NewSQL(dbPool)
+	catSvc := cat.NewService(catSQL)
+	catCtrl := cat.NewController(catSvc)
+
+	createCatHandler := userCtrl.AuthMiddleware(http.HandlerFunc(catCtrl.CreateHandler))
+	mux.Handle("POST /v1/cat", createCatHandler)
+
+	// === SERVE HTTP AND GRACE SHUTDOWN
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()

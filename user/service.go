@@ -11,7 +11,7 @@ import (
 
 type (
 	repo interface {
-		Create(ctx context.Context, args CreateUserRepoArgs) error
+		Create(ctx context.Context, args CreateUserRepoArgs) (string, error)
 		GetOneByEmail(ctx context.Context, email string) (User, error)
 	}
 
@@ -32,22 +32,22 @@ type RegisterArgs struct {
 	Password string
 }
 
-func (s Service) Register(ctx context.Context, args RegisterArgs) error {
+func (s Service) Register(ctx context.Context, args RegisterArgs) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(args.Password), s.saltCount)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	err = s.r.Create(ctx, CreateUserRepoArgs{
+	id, err := s.r.Create(ctx, CreateUserRepoArgs{
 		Email:          args.Email,
 		HashedPassword: string(hashedPassword),
 		Name:           args.Name,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return id, nil
 }
 
 type LoginArgs struct {
@@ -69,10 +69,10 @@ func (s Service) Login(ctx context.Context, args LoginArgs) (User, error) {
 	return u, nil
 }
 
-func (s Service) GetAccessToken() (string, error) {
-	return jwt.GenerateToken(8*time.Hour, s.jwtSecret)
+func (s Service) GetAccessToken(userID string) (string, error) {
+	return jwt.GenerateToken(8*time.Hour, s.jwtSecret, map[string]any{"userId": userID})
 }
 
-func (s Service) CheckAccessToken(token string) bool {
+func (s Service) IsAccessTokenValid(token string) (map[string]any, bool) {
 	return jwt.IsTokenValid(token, s.jwtSecret)
 }
