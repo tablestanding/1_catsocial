@@ -5,12 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-)
-
-var (
-	ErrUniqueEmailViolation = errors.New("unique email constraint violation")
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type (
@@ -21,19 +18,19 @@ type (
 	}
 
 	SQL struct {
-		pool *pgx.ConnPool
+		pool *pgxpool.Pool
 	}
 )
 
-func NewSQL(pool *pgx.ConnPool) SQL {
+func NewSQL(pool *pgxpool.Pool) SQL {
 	return SQL{pool}
 }
 
 func (s SQL) Create(ctx context.Context, args CreateUserRepoArgs) error {
-	_, err := s.pool.ExecEx(ctx, `
+	_, err := s.pool.Exec(ctx, `
 		insert into users(name, hashed_pw, email)
 		values ($1, $2, $3)
-	`, nil, args.Name, args.HashedPassword, args.Email)
+	`, args.Name, args.HashedPassword, args.Email)
 
 	var e *pgconn.PgError
 	if errors.As(err, &e) && e.Code == "23505" { // unique constraint violation
@@ -41,4 +38,22 @@ func (s SQL) Create(ctx context.Context, args CreateUserRepoArgs) error {
 	}
 
 	return err
+}
+
+func (s SQL) GetOneByEmail(ctx context.Context, email string) (User, error) {
+	var u User
+	err := s.pool.QueryRow(ctx, `
+		select id, email, hashed_pw, name
+		from users
+		where email = $1
+	`, email).Scan(&u.ID, &u.Email, &u.HashedPassword, &u.Name)
+	if err != nil && err == pgx.ErrNoRows {
+		e := err
+		if err == pgx.ErrNoRows {
+			e = ErrUserNotFound
+		}
+		return u, fmt.Errorf("finding user by email: %w", e)
+	}
+
+	return u, nil
 }
