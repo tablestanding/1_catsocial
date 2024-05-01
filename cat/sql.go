@@ -186,7 +186,7 @@ func (s SQL) Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error) {
 	return cats, nil
 }
 
-func (s SQL) GetOneByID(ctx context.Context, id string) (Cat, error) {
+func (s SQL) GetOneByID(ctx context.Context, id int) (Cat, error) {
 	var c Cat
 	err := s.pool.QueryRow(ctx, `
 		select
@@ -207,7 +207,7 @@ func (s SQL) GetOneByID(ctx context.Context, id string) (Cat, error) {
 	return c, nil
 }
 
-func (s SQL) GetByIDs(ctx context.Context, ids []string) ([]Cat, error) {
+func (s SQL) GetByIDs(ctx context.Context, ids []int) ([]Cat, error) {
 	var cats []Cat
 	rows, err := s.pool.Query(ctx, `
 		select

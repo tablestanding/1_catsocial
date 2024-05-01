@@ -13,6 +13,7 @@ type (
 		ReceiverUserID string
 		IssuerCatID    string
 		ReceiverCatID  string
+		Msg            string
 	}
 
 	GetRepoArgs struct {
@@ -30,9 +31,9 @@ func NewSQL(pool *pgxpool.Pool) SQL {
 
 func (s SQL) Create(ctx context.Context, args CreateRepoArgs) error {
 	_, err := s.pool.Exec(ctx, `
-		insert into matches(issuer_user_id, receiver_user_id, issuer_cat_id, receiver_cat_id)
-		values ($1, $2, $3, $4)
-	`, args.IssuerUserID, args.ReceiverUserID, args.IssuerCatID, args.ReceiverCatID)
+		insert into matches(issuer_user_id, receiver_user_id, issuer_cat_id, receiver_cat_id, msg)
+		values ($1, $2, $3, $4, $5)
+	`, args.IssuerUserID, args.ReceiverUserID, args.IssuerCatID, args.ReceiverCatID, args.Msg)
 	if err != nil {
 		return fmt.Errorf("sql create match: %w", err)
 	}
@@ -44,9 +45,9 @@ func (s SQL) Get(ctx context.Context, args GetRepoArgs) ([]Match, error) {
 	var matches []Match
 	rows, err := s.pool.Query(ctx, `
 		select
-			id,
-			msg,
-			created_at
+			m.id,
+			m.msg,
+			m.created_at,
 
 			issuer_user.name,
 			issuer_user.email,
@@ -57,9 +58,9 @@ func (s SQL) Get(ctx context.Context, args GetRepoArgs) ([]Match, error) {
 			issuer_cat.race, 
 			issuer_cat.sex, 
 			issuer_cat.description,
-			issuer_cat.age_in_month,, 
-			issuer_cat.image_urls,,
-			issuer_cat.has_matched,,
+			issuer_cat.age_in_month, 
+			issuer_cat.image_urls,
+			issuer_cat.has_matched,
 			issuer_cat.created_at,
 
 			receiver_cat.id,
@@ -67,9 +68,9 @@ func (s SQL) Get(ctx context.Context, args GetRepoArgs) ([]Match, error) {
 			receiver_cat.race, 
 			receiver_cat.sex, 
 			receiver_cat.description,
-			receiver_cat.age_in_month,, 
-			receiver_cat.image_urls,,
-			receiver_cat.has_matched,,
+			receiver_cat.age_in_month, 
+			receiver_cat.image_urls,
+			receiver_cat.has_matched,
 			receiver_cat.created_at
 		from matches m
 			inner join users issuer_user
@@ -80,6 +81,7 @@ func (s SQL) Get(ctx context.Context, args GetRepoArgs) ([]Match, error) {
 				on m.receiver_cat_id = receiver_cat.id
 		where m.issuer_user_id = $1
 		or m.receiver_user_id = $1
+		order by m.id desc
 	`, args.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("sql get matches: %w", err)

@@ -351,6 +351,6 @@ func (c Controller) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("decoding cats into json: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(http.StatusOK)
 	w.Write(respBody)
 }

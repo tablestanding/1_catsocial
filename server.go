@@ -2,6 +2,7 @@ package main
 
 import (
 	"catsocial/cat"
+	"catsocial/match"
 	"catsocial/pkg/env"
 	"catsocial/user"
 	"cmp"
@@ -61,6 +62,17 @@ func runServer() {
 	mux.Handle("POST /v1/cat", createCatHandler)
 	searchCatHandler := userCtrl.AuthMiddleware(http.HandlerFunc(catCtrl.SearchHandler))
 	mux.Handle("GET /v1/cat", searchCatHandler)
+
+	// === MATCH
+
+	matchSQL := match.NewSQL(dbPool)
+	matchSvc := match.NewService(matchSQL, catSvc)
+	matchCtrl := match.NewController(matchSvc)
+
+	createMatchHandler := userCtrl.AuthMiddleware(http.HandlerFunc(matchCtrl.CreateHandler))
+	mux.Handle("POST /v1/cat/match", createMatchHandler)
+	getMatchHandler := userCtrl.AuthMiddleware(http.HandlerFunc(matchCtrl.GetHandler))
+	mux.Handle("GET /v1/cat/match", getMatchHandler)
 
 	// === SERVE HTTP AND GRACE SHUTDOWN
 

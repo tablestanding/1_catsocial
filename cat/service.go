@@ -2,14 +2,16 @@ package cat
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 )
 
 type (
 	repo interface {
 		Create(ctx context.Context, args CreateRepoArgs) (Cat, error)
 		Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error)
-		GetOneByID(ctx context.Context, id string) (Cat, error)
-		GetByIDs(ctx context.Context, ids []string) ([]Cat, error)
+		GetOneByID(ctx context.Context, id int) (Cat, error)
+		GetByIDs(ctx context.Context, ids []int) ([]Cat, error)
 	}
 
 	Service struct {
@@ -74,9 +76,24 @@ func (s Service) Search(ctx context.Context, args SearchArgs) ([]Cat, error) {
 }
 
 func (s Service) GetOneByID(ctx context.Context, id string) (Cat, error) {
-	return s.r.GetOneByID(ctx, id)
+	i, err := strconv.Atoi(id)
+	if err != nil {
+		return Cat{}, fmt.Errorf("get cat by id: %w", err)
+	}
+
+	return s.r.GetOneByID(ctx, i)
 }
 
-func (s Service) GetByIDs(ctx context.Context, ids []string) ([]Cat, error) {
-	return s.r.GetByIDs(ctx, ids)
+func (s Service) GetByIDs(ctx context.Context, ids ...string) ([]Cat, error) {
+	var intIds []int
+	for _, id := range ids {
+		i, err := strconv.Atoi(id)
+		if err != nil {
+			return nil, fmt.Errorf("get cat by ids: %w", err)
+		}
+
+		intIds = append(intIds, i)
+	}
+
+	return s.r.GetByIDs(ctx, intIds)
 }

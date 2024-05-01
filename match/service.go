@@ -10,10 +10,11 @@ import (
 type (
 	matchRepo interface {
 		Create(ctx context.Context, args CreateRepoArgs) error
+		Get(ctx context.Context, args GetRepoArgs) ([]Match, error)
 	}
 
 	catSvc interface {
-		GetByIDs(ctx context.Context, ids []string) ([]cat.Cat, error)
+		GetByIDs(ctx context.Context, ids ...string) ([]cat.Cat, error)
 	}
 
 	Service struct {
@@ -34,7 +35,7 @@ type CreateArgs struct {
 }
 
 func (s Service) Create(ctx context.Context, args CreateArgs) error {
-	cats, err := s.catSvc.GetByIDs(ctx, []string{args.MatchCatID, args.UserCatID})
+	cats, err := s.catSvc.GetByIDs(ctx, args.MatchCatID, args.UserCatID)
 	if err != nil {
 		return fmt.Errorf("create match: %w", err)
 	}
@@ -75,10 +76,24 @@ func (s Service) Create(ctx context.Context, args CreateArgs) error {
 		ReceiverUserID: matchCat.UserID,
 		IssuerCatID:    strconv.Itoa(userCat.ID),
 		ReceiverCatID:  strconv.Itoa(matchCat.ID),
+		Msg:            args.Msg,
 	})
 	if err != nil {
 		return fmt.Errorf("create match: %w", err)
 	}
 
 	return nil
+}
+
+type GetArgs struct {
+	UserID string
+}
+
+func (s Service) Get(ctx context.Context, args GetArgs) ([]Match, error) {
+	matches, err := s.matchRepo.Get(ctx, GetRepoArgs{UserID: args.UserID})
+	if err != nil {
+		return nil, fmt.Errorf("get match: %w", err)
+	}
+
+	return matches, nil
 }
