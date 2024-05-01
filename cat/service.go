@@ -55,7 +55,7 @@ type SearchCatArgs struct {
 	NameQuery             *string
 }
 
-func (s Service) Search(ctx context.Context, args SearchCatRepoArgs) ([]Cat, error) {
+func (s Service) Search(ctx context.Context, args SearchCatArgs) ([]Cat, error) {
 	return s.r.Search(ctx, SearchCatRepoArgs{
 		ID:                    args.ID,
 		Limit:                 args.Limit,

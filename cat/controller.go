@@ -18,6 +18,7 @@ import (
 type (
 	svc interface {
 		Create(ctx context.Context, args CreateCatArgs) (Cat, error)
+		Search(ctx context.Context, args SearchCatArgs) ([]Cat, error)
 	}
 
 	Controller struct {
@@ -133,7 +134,7 @@ func (c Controller) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(respBody)
 }
 
-type SearchReqBody struct {
+type SearchQueries struct {
 	id         string
 	limit      string
 	offset     string
@@ -145,14 +146,14 @@ type SearchReqBody struct {
 	search     string
 }
 
-func (s SearchReqBody) ID() *string {
+func (s SearchQueries) ID() *string {
 	if s.id == "" {
 		return nil
 	}
 	return &s.id
 }
 
-func (s SearchReqBody) Limit() *int {
+func (s SearchQueries) Limit() *int {
 	if s.limit == "" {
 		return nil
 	}
@@ -165,7 +166,7 @@ func (s SearchReqBody) Limit() *int {
 	return &l
 }
 
-func (s SearchReqBody) Offset() *int {
+func (s SearchQueries) Offset() *int {
 	if s.offset == "" {
 		return nil
 	}
@@ -178,7 +179,7 @@ func (s SearchReqBody) Offset() *int {
 	return &o
 }
 
-func (s SearchReqBody) Race() *string {
+func (s SearchQueries) Race() *string {
 	if s.race == "" {
 		return nil
 	}
@@ -188,7 +189,7 @@ func (s SearchReqBody) Race() *string {
 	return &s.race
 }
 
-func (s SearchReqBody) Sex() *string {
+func (s SearchQueries) Sex() *string {
 	if s.race == "" {
 		return nil
 	}
@@ -198,7 +199,7 @@ func (s SearchReqBody) Sex() *string {
 	return &s.race
 }
 
-func (s SearchReqBody) HasMatched() *bool {
+func (s SearchQueries) HasMatched() *bool {
 	if s.hasMatched == "" {
 		return nil
 	}
@@ -213,7 +214,7 @@ func (s SearchReqBody) HasMatched() *bool {
 	return nil
 }
 
-func (s SearchReqBody) AgeInMonthGreaterThan() *int {
+func (s SearchQueries) AgeInMonthGreaterThan() *int {
 	if s.ageInMonth == "" {
 		return nil
 	}
@@ -227,7 +228,7 @@ func (s SearchReqBody) AgeInMonthGreaterThan() *int {
 	return nil
 }
 
-func (s SearchReqBody) AgeInMonthLessThan() *int {
+func (s SearchQueries) AgeInMonthLessThan() *int {
 	if s.ageInMonth == "" {
 		return nil
 	}
@@ -241,7 +242,7 @@ func (s SearchReqBody) AgeInMonthLessThan() *int {
 	return nil
 }
 
-func (s SearchReqBody) AgeInMonth() *int {
+func (s SearchQueries) AgeInMonth() *int {
 	if s.ageInMonth == "" {
 		return nil
 	}
@@ -252,7 +253,7 @@ func (s SearchReqBody) AgeInMonth() *int {
 	return &a
 }
 
-func (s SearchReqBody) UserID(userID string) *string {
+func (s SearchQueries) UserID(userID string) *string {
 	if s.owned == "" {
 		return nil
 	}
@@ -262,7 +263,7 @@ func (s SearchReqBody) UserID(userID string) *string {
 	return nil
 }
 
-func (s SearchReqBody) ExcludeUserID(userID string) *string {
+func (s SearchQueries) ExcludeUserID(userID string) *string {
 	if s.owned == "" {
 		return nil
 	}
@@ -272,10 +273,84 @@ func (s SearchReqBody) ExcludeUserID(userID string) *string {
 	return nil
 }
 
-func (s SearchReqBody) NameQuery() *string {
+func (s SearchQueries) NameQuery() *string {
 	if s.search == "" {
 		return nil
 	}
 	return &s.search
+}
 
+type SearchRespItem struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Race        string   `json:"race"`
+	Sex         string   `json:"sex"`
+	AgeInMonth  int      `json:"ageInMonth"`
+	ImageURLs   []string `json:"imageUrls"`
+	Description string   `json:"description"`
+	HasMatched  bool     `json:"hasMatched"`
+	CreatedAt   string   `json:"createdAt"`
+}
+
+func (c Controller) SearchHandler(w http.ResponseWriter, r *http.Request) {
+	queries := r.URL.Query()
+	sq := SearchQueries{
+		id:         queries.Get("id"),
+		limit:      queries.Get("limit"),
+		offset:     queries.Get("offset"),
+		race:       queries.Get("race"),
+		sex:        queries.Get("sex"),
+		hasMatched: queries.Get("hasMatched"),
+		ageInMonth: queries.Get("ageInMonth"),
+		owned:      queries.Get("owned"),
+		search:     queries.Get("search"),
+	}
+
+	userID, ok := user.UserIDFromContext(r.Context())
+	if !ok || userID == "" {
+		http.Error(w, "invalid access token", http.StatusInternalServerError)
+		return
+	}
+
+	cats, err := c.s.Search(r.Context(), SearchCatArgs{
+		ID:                    sq.ID(),
+		Limit:                 sq.Limit(),
+		Offset:                sq.Offset(),
+		Race:                  sq.Race(),
+		Sex:                   sq.Sex(),
+		HasMatched:            sq.HasMatched(),
+		AgeInMonthGreaterThan: sq.AgeInMonthGreaterThan(),
+		AgeInMonthLessThan:    sq.AgeInMonthLessThan(),
+		AgeInMonth:            sq.AgeInMonth(),
+		UserID:                sq.UserID(userID),
+		NameQuery:             sq.NameQuery(),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var items []SearchRespItem
+	for _, c := range cats {
+		items = append(items, SearchRespItem{
+			ID:          strconv.Itoa(c.ID),
+			Name:        c.Name,
+			Race:        c.Race,
+			Sex:         c.Sex,
+			AgeInMonth:  c.AgeInMonth,
+			ImageURLs:   c.ImageURLs,
+			Description: c.Description,
+			HasMatched:  c.HasMatched,
+			CreatedAt:   c.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	respBody, err := json.Marshal(web.NewResTemplate("success", items))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("decoding cats into json: %s", err.Error()), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	w.Write(respBody)
 }

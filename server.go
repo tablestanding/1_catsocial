@@ -59,6 +59,8 @@ func runServer() {
 
 	createCatHandler := userCtrl.AuthMiddleware(http.HandlerFunc(catCtrl.CreateHandler))
 	mux.Handle("POST /v1/cat", createCatHandler)
+	searchCatHandler := userCtrl.AuthMiddleware(http.HandlerFunc(catCtrl.SearchHandler))
+	mux.Handle("GET /v1/cat", searchCatHandler)
 
 	// === SERVE HTTP AND GRACE SHUTDOWN
 
