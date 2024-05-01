@@ -45,10 +45,10 @@ func (s SQL) Create(ctx context.Context, args CreateUserRepoArgs) (string, error
 func (s SQL) GetOneByEmail(ctx context.Context, email string) (User, error) {
 	var u User
 	err := s.pool.QueryRow(ctx, `
-		select id, email, hashed_pw, name
+		select id, email, hashed_pw, name, created_at
 		from users
 		where email = $1
-	`, email).Scan(&u.ID, &u.Email, &u.HashedPassword, &u.Name)
+	`, email).Scan(&u.ID, &u.Email, &u.HashedPassword, &u.Name, &u.CreatedAt)
 	if err != nil && err == pgx.ErrNoRows {
 		e := err
 		if err == pgx.ErrNoRows {
