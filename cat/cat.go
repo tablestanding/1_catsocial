@@ -19,7 +19,7 @@ var (
 
 type (
 	Cat struct {
-		ID          string
+		ID          int
 		UserID      string
 		Race        string
 		Sex         string
@@ -27,6 +27,7 @@ type (
 		Description string
 		ImageURLs   []string
 		HasMatched  bool
+		Name        string
 		CreatedAt   time.Time
 	}
 )

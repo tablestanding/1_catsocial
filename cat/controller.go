@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -99,7 +101,7 @@ func (c Controller) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := user.UserIDFromContext(r.Context())
 	if !ok || userID == "" {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "invalid access token", http.StatusInternalServerError)
 		return
 	}
 
@@ -118,7 +120,7 @@ func (c Controller) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := CreateResp{
-		ID:        cat.ID,
+		ID:        strconv.Itoa(cat.ID),
 		CreatedAt: cat.CreatedAt.Format(time.RFC3339),
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -129,4 +131,151 @@ func (c Controller) CreateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusCreated)
 	w.Write(respBody)
+}
+
+type SearchReqBody struct {
+	id         string
+	limit      string
+	offset     string
+	race       string
+	sex        string
+	hasMatched string
+	ageInMonth string
+	owned      string
+	search     string
+}
+
+func (s SearchReqBody) ID() *string {
+	if s.id == "" {
+		return nil
+	}
+	return &s.id
+}
+
+func (s SearchReqBody) Limit() *int {
+	if s.limit == "" {
+		return nil
+	}
+
+	l, err := strconv.Atoi(s.limit)
+	if err != nil {
+		return nil
+	}
+
+	return &l
+}
+
+func (s SearchReqBody) Offset() *int {
+	if s.offset == "" {
+		return nil
+	}
+
+	o, err := strconv.Atoi(s.offset)
+	if err != nil {
+		return nil
+	}
+
+	return &o
+}
+
+func (s SearchReqBody) Race() *string {
+	if s.race == "" {
+		return nil
+	}
+	if !slices.Contains(races, s.race) {
+		return nil
+	}
+	return &s.race
+}
+
+func (s SearchReqBody) Sex() *string {
+	if s.race == "" {
+		return nil
+	}
+	if s.race != "male" && s.race != "female" {
+		return nil
+	}
+	return &s.race
+}
+
+func (s SearchReqBody) HasMatched() *bool {
+	if s.hasMatched == "" {
+		return nil
+	}
+	if s.hasMatched == "true" {
+		h := true
+		return &h
+	}
+	if s.hasMatched == "false" {
+		h := false
+		return &h
+	}
+	return nil
+}
+
+func (s SearchReqBody) AgeInMonthGreaterThan() *int {
+	if s.ageInMonth == "" {
+		return nil
+	}
+	if strings.HasPrefix(s.ageInMonth, ">") {
+		a, err := strconv.Atoi(strings.TrimPrefix(s.ageInMonth, ">"))
+		if err != nil {
+			return nil
+		}
+		return &a
+	}
+	return nil
+}
+
+func (s SearchReqBody) AgeInMonthLessThan() *int {
+	if s.ageInMonth == "" {
+		return nil
+	}
+	if strings.HasPrefix(s.ageInMonth, "<") {
+		a, err := strconv.Atoi(strings.TrimPrefix(s.ageInMonth, "<"))
+		if err != nil {
+			return nil
+		}
+		return &a
+	}
+	return nil
+}
+
+func (s SearchReqBody) AgeInMonth() *int {
+	if s.ageInMonth == "" {
+		return nil
+	}
+	a, err := strconv.Atoi(s.ageInMonth)
+	if err != nil {
+		return nil
+	}
+	return &a
+}
+
+func (s SearchReqBody) UserID(userID string) *string {
+	if s.owned == "" {
+		return nil
+	}
+	if s.owned == "true" {
+		return &userID
+	}
+	return nil
+}
+
+func (s SearchReqBody) ExcludeUserID(userID string) *string {
+	if s.owned == "" {
+		return nil
+	}
+	if s.owned == "false" {
+		return &userID
+	}
+	return nil
+}
+
+func (s SearchReqBody) NameQuery() *string {
+	if s.search == "" {
+		return nil
+	}
+	return &s.search
+
 }

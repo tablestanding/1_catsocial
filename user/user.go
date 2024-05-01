@@ -2,7 +2,7 @@ package user
 
 type (
 	User struct {
-		ID             string
+		ID             int
 		Email          string
 		Name           string
 		HashedPassword string

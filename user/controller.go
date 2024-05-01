@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/mail"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -174,7 +175,7 @@ func (c Controller) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := c.s.GetAccessToken(u.ID)
+	token, err := c.s.GetAccessToken(strconv.Itoa(u.ID))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

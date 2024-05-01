@@ -3,9 +3,10 @@ begin;
 create table
     if not exists cats (
         id int primary key generated always as identity,
-        user_id text not null,
+        user_id int not null,
         race text not null,
         sex text not null,
+        name text not null,
         age_in_month int not null,
         description text not null,
         image_urls text[] not null,
