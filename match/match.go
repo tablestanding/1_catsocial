@@ -17,4 +17,15 @@ type (
 		CreatedAt                 time.Time
 		Msg                       string
 	}
+
+	MatchRaw struct {
+		ID                        int
+		IssuerUserID              int
+		ReceiverUserID            int
+		IssuerCatID               int
+		ReceiverCatID             int
+		HasBeenApprovedOrRejected bool
+		CreatedAt                 time.Time
+		Msg                       string
+	}
 )

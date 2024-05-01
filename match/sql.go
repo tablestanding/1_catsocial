@@ -3,7 +3,9 @@ package match
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,6 +20,15 @@ type (
 
 	GetRepoArgs struct {
 		UserID string
+	}
+
+	UpdateRepoArgs struct {
+		HasBeenApprovedOrRejected *bool
+	}
+
+	DeleteRepoArgs struct {
+		CatIDs         []int
+		ExcludeMatchID *int
 	}
 
 	SQL struct {
@@ -112,4 +123,121 @@ func (s SQL) Get(ctx context.Context, args GetRepoArgs) ([]Match, error) {
 	}
 
 	return matches, nil
+}
+
+func (s SQL) IsExist(ctx context.Context, id int) (bool, error) {
+	err := s.pool.QueryRow(ctx, "select 1 from matches where id = $1", id).Scan()
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("sql finding match by id: %w", err)
+	}
+
+	return true, nil
+}
+
+func (s SQL) GetHasBeenApprovedOrRejectedById(ctx context.Context, id int) (bool, error) {
+	var b bool
+	err := s.pool.QueryRow(ctx, "select has_been_approved_or_rejected from matches where id = $1", id).Scan(&b)
+	if err != nil {
+		e := err
+		if err == pgx.ErrNoRows {
+			e = ErrMatchNotFound
+		}
+		return b, fmt.Errorf("sql finding match by id: %w", e)
+	}
+
+	return b, nil
+}
+
+func (s SQL) GetById(ctx context.Context, id int) (MatchRaw, error) {
+	var m MatchRaw
+	err := s.pool.QueryRow(ctx, `
+		select 
+			id, issuer_user_id, receiver_user_id, issuer_cat_id, receiver_cat_id,
+			has_been_approved_or_rejected, created_at, msg
+		from matches 
+		where id = $1
+	`, id).Scan(&m.ID, &m.IssuerUserID, &m.ReceiverUserID, &m.IssuerCatID, &m.ReceiverCatID,
+		&m.HasBeenApprovedOrRejected, &m.CreatedAt, &m.Msg)
+	if err != nil {
+		e := err
+		if err == pgx.ErrNoRows {
+			e = ErrMatchNotFound
+		}
+		return MatchRaw{}, fmt.Errorf("sql finding match by id: %w", e)
+	}
+
+	return m, nil
+}
+
+func (s SQL) Update(ctx context.Context, id int, args UpdateRepoArgs) error {
+	var (
+		query   strings.Builder
+		sqlArgs []any
+
+		arg = 1
+	)
+	query.WriteString("update matches set ")
+
+	if args.HasBeenApprovedOrRejected != nil {
+		query.WriteString(fmt.Sprintf(`
+			has_been_approved_or_rejected = $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, *args.HasBeenApprovedOrRejected)
+		arg += 1
+	}
+
+	query.WriteString(fmt.Sprintf(`
+		where id = $%d
+	`, arg))
+	sqlArgs = append(sqlArgs, id)
+
+	_, err := s.pool.Exec(ctx, query.String(), sqlArgs...)
+	if err != nil {
+		return fmt.Errorf("sql update match by id: %w", err)
+	}
+
+	return nil
+}
+
+func (s SQL) Delete(ctx context.Context, args DeleteRepoArgs) error {
+	var (
+		query        strings.Builder
+		whereQueries []string
+		sqlArgs      []any
+
+		arg = 1
+	)
+	query.WriteString("delete from matches ")
+
+	if args.CatIDs != nil && len(args.CatIDs) > 0 {
+		whereQueries = append(whereQueries, fmt.Sprintf(`
+			(issuer_cat_id = any($%d) or receiver_cat_id = any($%d))
+		`, arg, arg))
+		sqlArgs = append(sqlArgs, args.CatIDs)
+		arg += 1
+	}
+
+	if args.ExcludeMatchID != nil {
+		whereQueries = append(whereQueries, (fmt.Sprintf(`
+			id != $%d
+		`, arg)))
+		sqlArgs = append(sqlArgs, *args.ExcludeMatchID)
+		arg += 1
+	}
+
+	if len(whereQueries) > 0 {
+		query.WriteString(fmt.Sprintf(`
+			where %s
+		`, strings.Join(whereQueries, " and ")))
+	}
+
+	_, err := s.pool.Exec(ctx, query.String(), sqlArgs...)
+	if err != nil {
+		return fmt.Errorf("sql delete matches: %w", err)
+	}
+
+	return nil
 }

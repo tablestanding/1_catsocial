@@ -7,4 +7,6 @@ var (
 	ErrCatsFromTheSameOwner = errors.New("cats are from the same owner")
 	ErrCatsHaveSameGender   = errors.New("cats have the same gender")
 	ErrUserDoesNotOwnCat    = errors.New("user does not own user cat")
+	ErrMatchNotFound        = errors.New("match not found")
+	ErrMatchNotValid        = errors.New("match not valid")
 )

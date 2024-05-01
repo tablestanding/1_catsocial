@@ -73,6 +73,8 @@ func runServer() {
 	mux.Handle("POST /v1/cat/match", createMatchHandler)
 	getMatchHandler := userCtrl.AuthMiddleware(http.HandlerFunc(matchCtrl.GetHandler))
 	mux.Handle("GET /v1/cat/match", getMatchHandler)
+	approveMatchHandler := userCtrl.AuthMiddleware(http.HandlerFunc(matchCtrl.ApproveHandler))
+	mux.Handle("POST /v1/cat/match/approve", approveMatchHandler)
 
 	// === SERVE HTTP AND GRACE SHUTDOWN
 

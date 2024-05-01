@@ -35,6 +35,11 @@ type (
 		NameQuery             *string
 	}
 
+	UpdateRepoArgs struct {
+		IDs        []int
+		HasMatched *bool
+	}
+
 	SQL struct {
 		pool *pgxpool.Pool
 	}
@@ -196,7 +201,7 @@ func (s SQL) GetOneByID(ctx context.Context, id int) (Cat, error) {
 		where id = $1
 	`, id).Scan(&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth,
 		&c.Description, &c.ImageURLs, &c.HasMatched, &c.CreatedAt)
-	if err != nil && err == pgx.ErrNoRows {
+	if err != nil {
 		e := err
 		if err == pgx.ErrNoRows {
 			e = ErrCatNotFound
@@ -238,4 +243,34 @@ func (s SQL) GetByIDs(ctx context.Context, ids []int) ([]Cat, error) {
 	}
 
 	return cats, nil
+}
+
+func (s SQL) Update(ctx context.Context, args UpdateRepoArgs) error {
+	var (
+		query   strings.Builder
+		sqlArgs []any
+
+		arg = 1
+	)
+	query.WriteString("update cats set ")
+
+	if args.HasMatched != nil {
+		query.WriteString(fmt.Sprintf(`
+			has_matched = $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, *args.HasMatched)
+		arg += 1
+	}
+
+	query.WriteString(fmt.Sprintf(`
+		where id = any($%d)
+	`, arg))
+	sqlArgs = append(sqlArgs, args.IDs)
+
+	_, err := s.pool.Exec(ctx, query.String(), sqlArgs...)
+	if err != nil {
+		return fmt.Errorf("sql update cats by ids: %w", err)
+	}
+
+	return nil
 }

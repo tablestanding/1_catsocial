@@ -17,6 +17,7 @@ type (
 	svc interface {
 		Create(ctx context.Context, args CreateArgs) error
 		Get(ctx context.Context, args GetArgs) ([]Match, error)
+		Approve(ctx context.Context, args ApproveArgs) error
 	}
 
 	Controller struct {
@@ -196,4 +197,59 @@ func (c Controller) GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(respBody)
+}
+
+type ApproveReqBody struct {
+	MatchID string `json:"matchId"`
+}
+
+func (a ApproveReqBody) Validate() bool {
+	// match id must not be empty
+	if a.MatchID == "" {
+		return false
+	}
+
+	// match id must be valid id
+	_, err := strconv.Atoi(a.MatchID)
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
+func (c Controller) ApproveHandler(w http.ResponseWriter, r *http.Request) {
+	reqBody, err := web.DecodeReqBody[ApproveReqBody](r.Body)
+	if errors.Is(err, web.ErrInvalidReqBody) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	userID, ok := user.UserIDFromContext(r.Context())
+	if !ok || userID == "" {
+		http.Error(w, "invalid access token", http.StatusInternalServerError)
+		return
+	}
+
+	err = c.s.Approve(r.Context(), ApproveArgs{
+		ID: reqBody.MatchID,
+	})
+	if errors.Is(err, ErrMatchNotValid) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if errors.Is(err, ErrMatchNotFound) {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

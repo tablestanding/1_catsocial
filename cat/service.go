@@ -12,6 +12,7 @@ type (
 		Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error)
 		GetOneByID(ctx context.Context, id int) (Cat, error)
 		GetByIDs(ctx context.Context, ids []int) ([]Cat, error)
+		Update(ctx context.Context, args UpdateRepoArgs) error
 	}
 
 	Service struct {
@@ -96,4 +97,21 @@ func (s Service) GetByIDs(ctx context.Context, ids ...string) ([]Cat, error) {
 	}
 
 	return s.r.GetByIDs(ctx, intIds)
+}
+
+type UpdateArgs struct {
+	IDs        []int
+	HasMatched *bool
+}
+
+func (s Service) Update(ctx context.Context, args UpdateArgs) error {
+	err := s.r.Update(ctx, UpdateRepoArgs{
+		IDs:        args.IDs,
+		HasMatched: args.HasMatched,
+	})
+	if err != nil {
+		return fmt.Errorf("update cats by ids: %w", err)
+	}
+
+	return nil
 }

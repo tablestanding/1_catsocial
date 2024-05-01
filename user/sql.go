@@ -52,7 +52,7 @@ func (s SQL) GetOneByEmail(ctx context.Context, email string) (User, error) {
 		from users
 		where email = $1
 	`, email).Scan(&u.ID, &u.Email, &u.HashedPassword, &u.Name, &u.CreatedAt)
-	if err != nil && err == pgx.ErrNoRows {
+	if err != nil {
 		e := err
 		if err == pgx.ErrNoRows {
 			e = ErrUserNotFound

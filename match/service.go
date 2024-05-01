@@ -2,6 +2,7 @@ package match
 
 import (
 	"catsocial/cat"
+	"catsocial/pkg/pointer"
 	"context"
 	"fmt"
 	"strconv"
@@ -11,10 +12,14 @@ type (
 	matchRepo interface {
 		Create(ctx context.Context, args CreateRepoArgs) error
 		Get(ctx context.Context, args GetRepoArgs) ([]Match, error)
+		GetById(ctx context.Context, id int) (MatchRaw, error)
+		Update(ctx context.Context, id int, args UpdateRepoArgs) error
+		Delete(ctx context.Context, args DeleteRepoArgs) error
 	}
 
 	catSvc interface {
 		GetByIDs(ctx context.Context, ids ...string) ([]cat.Cat, error)
+		Update(ctx context.Context, args cat.UpdateArgs) error
 	}
 
 	Service struct {
@@ -96,4 +101,48 @@ func (s Service) Get(ctx context.Context, args GetArgs) ([]Match, error) {
 	}
 
 	return matches, nil
+}
+
+type ApproveArgs struct {
+	ID string
+}
+
+func (s Service) Approve(ctx context.Context, args ApproveArgs) error {
+	intID, err := strconv.Atoi(args.ID)
+	if err != nil {
+		return fmt.Errorf("approve match: %w", err)
+	}
+
+	matchRaw, err := s.matchRepo.GetById(ctx, intID)
+	if err != nil {
+		return fmt.Errorf("approve match: %w", err)
+	}
+	if matchRaw.HasBeenApprovedOrRejected {
+		return fmt.Errorf("approve match: %w", ErrMatchNotValid)
+	}
+
+	err = s.matchRepo.Update(ctx, intID, UpdateRepoArgs{
+		HasBeenApprovedOrRejected: pointer.Pointer(true),
+	})
+	if err != nil {
+		return fmt.Errorf("approve match: %w", err)
+	}
+
+	err = s.matchRepo.Delete(ctx, DeleteRepoArgs{
+		CatIDs:         []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
+		ExcludeMatchID: pointer.Pointer(matchRaw.ID),
+	})
+	if err != nil {
+		return fmt.Errorf("approve match: %w", err)
+	}
+
+	err = s.catSvc.Update(ctx, cat.UpdateArgs{
+		IDs:        []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
+		HasMatched: pointer.Pointer(true),
+	})
+	if err != nil {
+		return fmt.Errorf("approve match: %w", err)
+	}
+
+	return nil
 }
