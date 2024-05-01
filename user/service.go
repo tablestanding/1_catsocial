@@ -35,7 +35,7 @@ type RegisterArgs struct {
 func (s Service) Register(ctx context.Context, args RegisterArgs) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(args.Password), s.saltCount)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("register user: %w", err)
 	}
 
 	id, err := s.r.Create(ctx, CreateUserRepoArgs{
@@ -44,7 +44,7 @@ func (s Service) Register(ctx context.Context, args RegisterArgs) (string, error
 		Name:           args.Name,
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("register user: %w", err)
 	}
 
 	return id, nil
@@ -58,12 +58,12 @@ type LoginArgs struct {
 func (s Service) Login(ctx context.Context, args LoginArgs) (User, error) {
 	u, err := s.r.GetOneByEmail(ctx, args.Email)
 	if err != nil {
-		return u, fmt.Errorf("login: %w", err)
+		return u, fmt.Errorf("login user: %w", err)
 	}
 
 	pwErr := bcrypt.CompareHashAndPassword([]byte(u.HashedPassword), []byte(args.Password))
 	if pwErr != nil {
-		return u, ErrInvalidPassword
+		return u, fmt.Errorf("login user: %w", ErrInvalidPassword)
 	}
 
 	return u, nil

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -21,7 +22,7 @@ func GenerateToken(duration time.Duration, secret string, p map[string]any) (str
 	p["exp"] = int(time.Now().Add(duration).Unix())
 	payload, err := json.Marshal(p)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("jwt generate token: %w", err)
 	}
 	headerAndPayload := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(payload)
 

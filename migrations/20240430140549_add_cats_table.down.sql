@@ -1,16 +1,16 @@
 begin;
 
-drop index if exists search_cats_1;
+drop index if exists idx_cats_user_id;
 
-drop index if exists search_cats_2;
+drop index if exists idx_cats_has_matched;
 
-drop index if exists search_cats_3;
+drop index if exists idx_cats_sex;
 
-drop index if exists search_cats_4;
+drop index if exists idx_cats_race;
 
-drop index if exists search_cats_5;
+drop index if exists idx_cats_age_in_month;
 
-drop index if exists search_cats_trgm_1;
+drop index if exists idx_cats_name_normalized;
 
 drop table if exists cats;
 

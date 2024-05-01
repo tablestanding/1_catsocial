@@ -6,8 +6,10 @@ import (
 
 type (
 	repo interface {
-		Create(ctx context.Context, args CreateCatRepoArgs) (Cat, error)
-		Search(ctx context.Context, args SearchCatRepoArgs) ([]Cat, error)
+		Create(ctx context.Context, args CreateRepoArgs) (Cat, error)
+		Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error)
+		GetOneByID(ctx context.Context, id string) (Cat, error)
+		GetByIDs(ctx context.Context, ids []string) ([]Cat, error)
 	}
 
 	Service struct {
@@ -19,7 +21,7 @@ func NewService(r repo) Service {
 	return Service{r}
 }
 
-type CreateCatArgs struct {
+type CreateArgs struct {
 	Race        string
 	Sex         string
 	Name        string
@@ -29,8 +31,8 @@ type CreateCatArgs struct {
 	UserID      string
 }
 
-func (s Service) Create(ctx context.Context, args CreateCatArgs) (Cat, error) {
-	return s.r.Create(ctx, CreateCatRepoArgs{
+func (s Service) Create(ctx context.Context, args CreateArgs) (Cat, error) {
+	return s.r.Create(ctx, CreateRepoArgs{
 		Race:        args.Race,
 		Sex:         args.Sex,
 		Name:        args.Name,
@@ -41,7 +43,7 @@ func (s Service) Create(ctx context.Context, args CreateCatArgs) (Cat, error) {
 	})
 }
 
-type SearchCatArgs struct {
+type SearchArgs struct {
 	ID                    *string
 	Limit                 *int
 	Offset                *int
@@ -55,8 +57,8 @@ type SearchCatArgs struct {
 	NameQuery             *string
 }
 
-func (s Service) Search(ctx context.Context, args SearchCatArgs) ([]Cat, error) {
-	return s.r.Search(ctx, SearchCatRepoArgs{
+func (s Service) Search(ctx context.Context, args SearchArgs) ([]Cat, error) {
+	return s.r.Search(ctx, SearchRepoArgs{
 		ID:                    args.ID,
 		Limit:                 args.Limit,
 		Offset:                args.Offset,
@@ -69,4 +71,12 @@ func (s Service) Search(ctx context.Context, args SearchCatArgs) ([]Cat, error) 
 		UserID:                args.UserID,
 		NameQuery:             args.NameQuery,
 	})
+}
+
+func (s Service) GetOneByID(ctx context.Context, id string) (Cat, error) {
+	return s.r.GetOneByID(ctx, id)
+}
+
+func (s Service) GetByIDs(ctx context.Context, ids []string) ([]Cat, error) {
+	return s.r.GetByIDs(ctx, ids)
 }

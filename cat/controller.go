@@ -17,8 +17,8 @@ import (
 
 type (
 	svc interface {
-		Create(ctx context.Context, args CreateCatArgs) (Cat, error)
-		Search(ctx context.Context, args SearchCatArgs) ([]Cat, error)
+		Create(ctx context.Context, args CreateArgs) (Cat, error)
+		Search(ctx context.Context, args SearchArgs) ([]Cat, error)
 	}
 
 	Controller struct {
@@ -106,7 +106,7 @@ func (c Controller) CreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cat, err := c.s.Create(r.Context(), CreateCatArgs{
+	cat, err := c.s.Create(r.Context(), CreateArgs{
 		Race:        reqBody.Race,
 		Sex:         reqBody.Sex,
 		Name:        reqBody.Name,
@@ -312,7 +312,7 @@ func (c Controller) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cats, err := c.s.Search(r.Context(), SearchCatArgs{
+	cats, err := c.s.Search(r.Context(), SearchArgs{
 		ID:                    sq.ID(),
 		Limit:                 sq.Limit(),
 		Offset:                sq.Offset(),

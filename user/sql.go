@@ -38,6 +38,9 @@ func (s SQL) Create(ctx context.Context, args CreateUserRepoArgs) (string, error
 	if errors.As(err, &e) && e.Code == "23505" { // unique constraint violation
 		return "", fmt.Errorf("sql create user: %w", ErrUniqueEmailViolation)
 	}
+	if err != nil {
+		return "", fmt.Errorf("sql create user: %w", err)
+	}
 
 	return id, err
 }
@@ -54,7 +57,7 @@ func (s SQL) GetOneByEmail(ctx context.Context, email string) (User, error) {
 		if err == pgx.ErrNoRows {
 			e = ErrUserNotFound
 		}
-		return u, fmt.Errorf("finding user by email: %w", e)
+		return u, fmt.Errorf("sql finding user by email: %w", e)
 	}
 
 	return u, nil

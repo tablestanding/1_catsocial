@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type (
-	CreateCatRepoArgs struct {
+	CreateRepoArgs struct {
 		Race        string
 		Sex         string
 		Name        string
@@ -19,7 +20,7 @@ type (
 		UserID      string
 	}
 
-	SearchCatRepoArgs struct {
+	SearchRepoArgs struct {
 		ID                    *string
 		Limit                 *int
 		Offset                *int
@@ -43,7 +44,7 @@ func NewSQL(pool *pgxpool.Pool) SQL {
 	return SQL{pool}
 }
 
-func (s SQL) Create(ctx context.Context, args CreateCatRepoArgs) (Cat, error) {
+func (s SQL) Create(ctx context.Context, args CreateRepoArgs) (Cat, error) {
 	c := Cat{
 		UserID:      args.UserID,
 		Race:        args.Race,
@@ -59,11 +60,14 @@ func (s SQL) Create(ctx context.Context, args CreateCatRepoArgs) (Cat, error) {
 		returning id, created_at, has_matched
 	`, args.UserID, args.Race, args.Sex, args.AgeInMonth, args.Description, args.ImageURLs, args.Name, strings.ToLower(args.Name)).
 		Scan(&c.ID, &c.CreatedAt, &c.HasMatched)
+	if err != nil {
+		return c, fmt.Errorf("sql create cat: %w", err)
+	}
 
-	return c, err
+	return c, nil
 }
 
-func (s SQL) Search(ctx context.Context, args SearchCatRepoArgs) ([]Cat, error) {
+func (s SQL) Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error) {
 	var (
 		cats         []Cat
 		query        strings.Builder
@@ -159,7 +163,7 @@ func (s SQL) Search(ctx context.Context, args SearchCatRepoArgs) ([]Cat, error) 
 	fmt.Println(query.String())
 	rows, err := s.pool.Query(ctx, query.String(), sqlArgs...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sql search cat: %w", err)
 	}
 	defer rows.Close()
 
@@ -170,13 +174,67 @@ func (s SQL) Search(ctx context.Context, args SearchCatRepoArgs) ([]Cat, error) 
 			&c.Description, &c.ImageURLs, &c.HasMatched, &c.CreatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("sql search cat: %w", err)
 		}
 
 		cats = append(cats, c)
 	}
-	if err == nil {
-		err = rows.Err()
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("sql search cat: %w", rows.Err())
+	}
+
+	return cats, nil
+}
+
+func (s SQL) GetOneByID(ctx context.Context, id string) (Cat, error) {
+	var c Cat
+	err := s.pool.QueryRow(ctx, `
+		select
+			id, user_id, race, sex, name, age_in_month,
+			description, image_urls, has_matched, created_at
+		from cats
+		where id = $1
+	`, id).Scan(&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth,
+		&c.Description, &c.ImageURLs, &c.HasMatched, &c.CreatedAt)
+	if err != nil && err == pgx.ErrNoRows {
+		e := err
+		if err == pgx.ErrNoRows {
+			e = ErrCatNotFound
+		}
+		return c, fmt.Errorf("sql finding cat by id: %w", e)
+	}
+
+	return c, nil
+}
+
+func (s SQL) GetByIDs(ctx context.Context, ids []string) ([]Cat, error) {
+	var cats []Cat
+	rows, err := s.pool.Query(ctx, `
+		select
+			id, user_id, race, sex, name, age_in_month,
+			description, image_urls, has_matched, created_at
+		from cats
+		where id = any($1)
+	`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("sql get cats by ids: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var c Cat
+		err = rows.Scan(
+			&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth,
+			&c.Description, &c.ImageURLs, &c.HasMatched, &c.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("sql get cats by ids: %w", err)
+		}
+
+		cats = append(cats, c)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("sql get cats by ids: %w", rows.Err())
 	}
 
 	return cats, nil

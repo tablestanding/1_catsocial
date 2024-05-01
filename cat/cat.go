@@ -2,21 +2,6 @@ package cat
 
 import "time"
 
-var (
-	races = []string{
-		"Persian",
-		"Maine Coon",
-		"Siamese",
-		"Ragdoll",
-		"Bengal",
-		"Sphynx",
-		"British Shorthair",
-		"Abyssinian",
-		"Scottish Fold",
-		"Birman",
-	}
-)
-
 type (
 	Cat struct {
 		ID          int
@@ -29,5 +14,20 @@ type (
 		HasMatched  bool
 		Name        string
 		CreatedAt   time.Time
+	}
+)
+
+var (
+	races = []string{
+		"Persian",
+		"Maine Coon",
+		"Siamese",
+		"Ragdoll",
+		"Bengal",
+		"Sphynx",
+		"British Shorthair",
+		"Abyssinian",
+		"Scottish Fold",
+		"Birman",
 	}
 )
