@@ -330,7 +330,7 @@ func (c Controller) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var items []SearchRespItem
+	items := make([]SearchRespItem, 0)
 	for _, c := range cats {
 		items = append(items, SearchRespItem{
 			ID:          strconv.Itoa(c.ID),

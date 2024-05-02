@@ -17,7 +17,9 @@ type (
 	svc interface {
 		Create(ctx context.Context, args CreateArgs) error
 		Get(ctx context.Context, args GetArgs) ([]Match, error)
-		Approve(ctx context.Context, args ApproveArgs) error
+		Approve(ctx context.Context, matchID string) error
+		Reject(ctx context.Context, matchID string) error
+		Delete(ctx context.Context, args DeleteArgs) error
 	}
 
 	Controller struct {
@@ -147,7 +149,7 @@ func (c Controller) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var items []GetRespItem
+	items := make([]GetRespItem, 0)
 	for _, m := range matches {
 		userCat := m.ReceiverCat
 		matchCat := m.IssuerCat
@@ -235,8 +237,98 @@ func (c Controller) ApproveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = c.s.Approve(r.Context(), ApproveArgs{
-		ID: reqBody.MatchID,
+	err = c.s.Approve(r.Context(), reqBody.MatchID)
+	if errors.Is(err, ErrMatchNotValid) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if errors.Is(err, ErrMatchNotFound) {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+type RejectReqBody struct {
+	MatchID string `json:"matchId"`
+}
+
+func (r RejectReqBody) Validate() bool {
+	// match id must not be empty
+	if r.MatchID == "" {
+		return false
+	}
+
+	// match id must be valid id
+	_, err := strconv.Atoi(r.MatchID)
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
+func (c Controller) RejectHandler(w http.ResponseWriter, r *http.Request) {
+	reqBody, err := web.DecodeReqBody[RejectReqBody](r.Body)
+	if errors.Is(err, web.ErrInvalidReqBody) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	userID, ok := user.UserIDFromContext(r.Context())
+	if !ok || userID == "" {
+		http.Error(w, "invalid access token", http.StatusInternalServerError)
+		return
+	}
+
+	err = c.s.Reject(r.Context(), reqBody.MatchID)
+	if errors.Is(err, ErrMatchNotValid) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if errors.Is(err, ErrMatchNotFound) {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (c Controller) DeleteHandler(w http.ResponseWriter, r *http.Request) {
+	matchID := r.PathValue("id")
+	if matchID == "" {
+		http.Error(w, "match id is empty", http.StatusNotFound)
+		return
+	}
+
+	intMatchID, err := strconv.Atoi(matchID)
+	if err != nil {
+		http.Error(w, "match id is not valid", http.StatusNotFound)
+		return
+	}
+
+	userID, ok := user.UserIDFromContext(r.Context())
+	if !ok || userID == "" {
+		http.Error(w, "invalid access token", http.StatusInternalServerError)
+		return
+	}
+
+	err = c.s.Delete(r.Context(), DeleteArgs{
+		UserID:  userID,
+		MatchID: intMatchID,
 	})
 	if errors.Is(err, ErrMatchNotValid) {
 		http.Error(w, err.Error(), http.StatusBadRequest)

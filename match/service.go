@@ -103,12 +103,8 @@ func (s Service) Get(ctx context.Context, args GetArgs) ([]Match, error) {
 	return matches, nil
 }
 
-type ApproveArgs struct {
-	ID string
-}
-
-func (s Service) Approve(ctx context.Context, args ApproveArgs) error {
-	intID, err := strconv.Atoi(args.ID)
+func (s Service) Approve(ctx context.Context, matchID string) error {
+	intID, err := strconv.Atoi(matchID)
 	if err != nil {
 		return fmt.Errorf("approve match: %w", err)
 	}
@@ -139,6 +135,57 @@ func (s Service) Approve(ctx context.Context, args ApproveArgs) error {
 	err = s.catSvc.Update(ctx, cat.UpdateArgs{
 		IDs:        []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
 		HasMatched: pointer.Pointer(true),
+	})
+	if err != nil {
+		return fmt.Errorf("approve match: %w", err)
+	}
+
+	return nil
+}
+
+func (s Service) Reject(ctx context.Context, matchID string) error {
+	intID, err := strconv.Atoi(matchID)
+	if err != nil {
+		return fmt.Errorf("approve match: %w", err)
+	}
+
+	matchRaw, err := s.matchRepo.GetById(ctx, intID)
+	if err != nil {
+		return fmt.Errorf("approve match: %w", err)
+	}
+	if matchRaw.HasBeenApprovedOrRejected {
+		return fmt.Errorf("approve match: %w", ErrMatchNotValid)
+	}
+
+	err = s.matchRepo.Update(ctx, intID, UpdateRepoArgs{
+		HasBeenApprovedOrRejected: pointer.Pointer(true),
+	})
+	if err != nil {
+		return fmt.Errorf("approve match: %w", err)
+	}
+
+	return nil
+}
+
+type DeleteArgs struct {
+	MatchID int
+	UserID  string
+}
+
+func (s Service) Delete(ctx context.Context, args DeleteArgs) error {
+	matchRaw, err := s.matchRepo.GetById(ctx, args.MatchID)
+	if err != nil {
+		return fmt.Errorf("approve match: %w", err)
+	}
+	if matchRaw.HasBeenApprovedOrRejected {
+		return fmt.Errorf("approve match: %w", ErrMatchNotValid)
+	}
+	if strconv.Itoa(matchRaw.IssuerUserID) != args.UserID {
+		return fmt.Errorf("approve match: %w", ErrMatchNotFound)
+	}
+
+	err = s.matchRepo.Delete(ctx, DeleteRepoArgs{
+		MatchID: &args.MatchID,
 	})
 	if err != nil {
 		return fmt.Errorf("approve match: %w", err)

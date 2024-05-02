@@ -29,6 +29,7 @@ type (
 	DeleteRepoArgs struct {
 		CatIDs         []int
 		ExcludeMatchID *int
+		MatchID        *int
 	}
 
 	SQL struct {
@@ -225,6 +226,14 @@ func (s SQL) Delete(ctx context.Context, args DeleteRepoArgs) error {
 			id != $%d
 		`, arg)))
 		sqlArgs = append(sqlArgs, *args.ExcludeMatchID)
+		arg += 1
+	}
+
+	if args.MatchID != nil {
+		whereQueries = append(whereQueries, (fmt.Sprintf(`
+			id = $%d
+		`, arg)))
+		sqlArgs = append(sqlArgs, *args.MatchID)
 		arg += 1
 	}
 
