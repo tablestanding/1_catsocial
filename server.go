@@ -4,6 +4,7 @@ import (
 	"catsocial/cat"
 	"catsocial/match"
 	"catsocial/pkg/env"
+	"catsocial/pkg/pgxtrx"
 	"catsocial/user"
 	"cmp"
 	"context"
@@ -21,8 +22,11 @@ import (
 )
 
 func runServer() {
+	// === DB
 	dbPool := initDB()
 	defer dbPool.Close()
+
+	pgxTrx := pgxtrx.New(dbPool)
 
 	// === ENV VAR
 
@@ -59,8 +63,8 @@ func runServer() {
 
 	// === CAT
 
-	catSQL := cat.NewSQL(dbPool)
-	catSvc := cat.NewService(catSQL)
+	catSQL := cat.NewSQL(pgxTrx)
+	catSvc := cat.NewService(catSQL, pgxTrx)
 	catCtrl := cat.NewController(catSvc)
 
 	createCatHandler := userCtrl.AuthMiddleware(http.HandlerFunc(catCtrl.CreateHandler))
@@ -74,8 +78,8 @@ func runServer() {
 
 	// === MATCH
 
-	matchSQL := match.NewSQL(dbPool)
-	matchSvc := match.NewService(matchSQL, catSvc)
+	matchSQL := match.NewSQL(pgxTrx)
+	matchSvc := match.NewService(matchSQL, catSvc, pgxTrx)
 	matchCtrl := match.NewController(matchSvc)
 
 	createMatchHandler := userCtrl.AuthMiddleware(http.HandlerFunc(matchCtrl.CreateHandler))

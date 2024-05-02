@@ -1,22 +1,22 @@
 package match
 
 import (
+	"catsocial/pkg/pgxtrx"
 	"context"
 	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type (
 	SQL struct {
-		pool *pgxpool.Pool
+		pgxTrx pgxtrx.PgxTrx
 	}
 )
 
-func NewSQL(pool *pgxpool.Pool) SQL {
-	return SQL{pool}
+func NewSQL(pgxTrx pgxtrx.PgxTrx) SQL {
+	return SQL{pgxTrx}
 }
 
 type createRepoArgs struct {
@@ -28,7 +28,9 @@ type createRepoArgs struct {
 }
 
 func (s SQL) Create(ctx context.Context, args createRepoArgs) error {
-	_, err := s.pool.Exec(ctx, `
+	db := s.pgxTrx.FromContext(ctx)
+
+	_, err := db.Exec(ctx, `
 		insert into matches(issuer_user_id, receiver_user_id, issuer_cat_id, receiver_cat_id, msg)
 		values ($1, $2, $3, $4, $5)
 	`, args.IssuerUserID, args.ReceiverUserID, args.IssuerCatID, args.ReceiverCatID, args.Msg)
@@ -44,8 +46,10 @@ type getRepoArgs struct {
 }
 
 func (s SQL) Get(ctx context.Context, args getRepoArgs) ([]Match, error) {
+	db := s.pgxTrx.FromContext(ctx)
+
 	var matches []Match
-	rows, err := s.pool.Query(ctx, `
+	rows, err := db.Query(ctx, `
 		select
 			m.id,
 			m.msg,
@@ -117,7 +121,9 @@ func (s SQL) Get(ctx context.Context, args getRepoArgs) ([]Match, error) {
 }
 
 func (s SQL) IsExist(ctx context.Context, id int) (bool, error) {
-	err := s.pool.QueryRow(ctx, "select 1 from matches where id = $1", id).Scan()
+	db := s.pgxTrx.FromContext(ctx)
+
+	err := db.QueryRow(ctx, "select 1 from matches where id = $1", id).Scan()
 	if err == pgx.ErrNoRows {
 		return false, nil
 	}
@@ -129,8 +135,10 @@ func (s SQL) IsExist(ctx context.Context, id int) (bool, error) {
 }
 
 func (s SQL) GetHasBeenApprovedOrRejectedById(ctx context.Context, id int) (bool, error) {
+	db := s.pgxTrx.FromContext(ctx)
+
 	var b bool
-	err := s.pool.QueryRow(ctx, "select has_been_approved_or_rejected from matches where id = $1", id).Scan(&b)
+	err := db.QueryRow(ctx, "select has_been_approved_or_rejected from matches where id = $1", id).Scan(&b)
 	if err != nil {
 		e := err
 		if err == pgx.ErrNoRows {
@@ -142,16 +150,40 @@ func (s SQL) GetHasBeenApprovedOrRejectedById(ctx context.Context, id int) (bool
 	return b, nil
 }
 
-func (s SQL) GetByID(ctx context.Context, id int) (MatchRaw, error) {
-	var m MatchRaw
-	err := s.pool.QueryRow(ctx, `
+type getByIDRepoArgs struct {
+	ID            int
+	ForUpdateCats bool
+}
+
+func (s SQL) GetByID(ctx context.Context, args getByIDRepoArgs) (MatchRaw, error) {
+	db := s.pgxTrx.FromContext(ctx)
+
+	query := `
 		select 
 			id, issuer_user_id, receiver_user_id, issuer_cat_id, receiver_cat_id,
 			has_been_approved_or_rejected, created_at, msg
 		from matches 
 		where id = $1
-	`, id).Scan(&m.ID, &m.IssuerUserID, &m.ReceiverUserID, &m.IssuerCatID, &m.ReceiverCatID,
-		&m.HasBeenApprovedOrRejected, &m.CreatedAt, &m.Msg)
+	`
+	if args.ForUpdateCats {
+		query = `
+			select 
+				m.id, m.issuer_user_id, m.receiver_user_id, m.issuer_cat_id, m.receiver_cat_id,
+				m.has_been_approved_or_rejected, m.created_at, m.msg
+			from matches m
+				inner join cats issuer_cat
+					on m.issuer_cat_id = issuer_cat.id
+				inner join cats receiver_cat
+					on m.receiver_cat_id = receiver_cat.id
+			where id = $1
+			for update on issuer_cat, receiver_cat
+		`
+	}
+
+	var m MatchRaw
+	err := db.QueryRow(ctx, query, args.ID).
+		Scan(&m.ID, &m.IssuerUserID, &m.ReceiverUserID, &m.IssuerCatID, &m.ReceiverCatID,
+			&m.HasBeenApprovedOrRejected, &m.CreatedAt, &m.Msg)
 	if err != nil {
 		e := err
 		if err == pgx.ErrNoRows {
@@ -164,8 +196,10 @@ func (s SQL) GetByID(ctx context.Context, id int) (MatchRaw, error) {
 }
 
 func (s SQL) GetByCatID(ctx context.Context, catID int) (MatchRaw, error) {
+	db := s.pgxTrx.FromContext(ctx)
+
 	var m MatchRaw
-	err := s.pool.QueryRow(ctx, `
+	err := db.QueryRow(ctx, `
 		select 
 			id, issuer_user_id, receiver_user_id, issuer_cat_id, receiver_cat_id,
 			has_been_approved_or_rejected, created_at, msg
@@ -212,7 +246,8 @@ func (s SQL) Update(ctx context.Context, args updateRepoArgs) error {
 	`, arg))
 	sqlArgs = append(sqlArgs, args.ID)
 
-	_, err := s.pool.Exec(ctx, query.String(), sqlArgs...)
+	db := s.pgxTrx.FromContext(ctx)
+	_, err := db.Exec(ctx, query.String(), sqlArgs...)
 	if err != nil {
 		return fmt.Errorf("sql update match by id: %w", err)
 	}
@@ -266,7 +301,8 @@ func (s SQL) Delete(ctx context.Context, args deleteRepoArgs) error {
 		`, strings.Join(whereQueries, " and ")))
 	}
 
-	_, err := s.pool.Exec(ctx, query.String(), sqlArgs...)
+	db := s.pgxTrx.FromContext(ctx)
+	_, err := db.Exec(ctx, query.String(), sqlArgs...)
 	if err != nil {
 		return fmt.Errorf("sql delete matches: %w", err)
 	}

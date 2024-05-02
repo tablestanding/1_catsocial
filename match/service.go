@@ -12,25 +12,30 @@ type (
 	matchRepo interface {
 		Create(ctx context.Context, args createRepoArgs) error
 		Get(ctx context.Context, args getRepoArgs) ([]Match, error)
-		GetByID(ctx context.Context, id int) (MatchRaw, error)
+		GetByID(ctx context.Context, args getByIDRepoArgs) (MatchRaw, error)
 		GetByCatID(ctx context.Context, catID int) (MatchRaw, error)
 		Update(ctx context.Context, args updateRepoArgs) error
 		Delete(ctx context.Context, args deleteRepoArgs) error
 	}
 
 	catSvc interface {
-		GetByIDs(ctx context.Context, ids ...string) ([]cat.Cat, error)
+		GetByIDs(ctx context.Context, args cat.GetByIDsArgs) ([]cat.Cat, error)
 		Update(ctx context.Context, args cat.UpdateArgs) error
+	}
+
+	trx interface {
+		WithTransaction(ctx context.Context, fn func(context.Context) error) error
 	}
 
 	Service struct {
 		matchRepo matchRepo
 		catSvc    catSvc
+		trx       trx
 	}
 )
 
-func NewService(matchRepo matchRepo, catSvc catSvc) Service {
-	return Service{matchRepo: matchRepo, catSvc: catSvc}
+func NewService(matchRepo matchRepo, catSvc catSvc, trx trx) Service {
+	return Service{matchRepo: matchRepo, catSvc: catSvc, trx: trx}
 }
 
 type CreateArgs struct {
@@ -41,59 +46,69 @@ type CreateArgs struct {
 }
 
 func (s Service) Create(ctx context.Context, args CreateArgs) error {
-	cats, err := s.catSvc.GetByIDs(ctx, args.MatchCatID, args.UserCatID)
-	if err != nil {
-		return fmt.Errorf("create match: get cat by ids: %w", err)
-	}
+	err := s.trx.WithTransaction(ctx, func(ctx context.Context) error {
+		cats, err := s.catSvc.GetByIDs(ctx, cat.GetByIDsArgs{
+			IDs:       []string{args.MatchCatID, args.UserCatID},
+			ForUpdate: true,
+		})
+		if err != nil {
+			return fmt.Errorf("get cat by ids: %w", err)
+		}
 
-	// must be 2 valid cats
-	if len(cats) != 2 {
-		return fmt.Errorf("create match: %w", cat.ErrCatNotFound)
-	}
+		// must be 2 valid cats
+		if len(cats) != 2 {
+			return cat.ErrCatNotFound
+		}
 
-	// both cats must have not been matched
-	if cats[0].HasMatched || cats[1].HasMatched {
-		return fmt.Errorf("create match: %w", ErrCatHasBeenMatched)
-	}
+		// both cats must have not been matched
+		if cats[0].HasMatched || cats[1].HasMatched {
+			return ErrCatHasBeenMatched
+		}
 
-	// the cats are from different owner
-	if cats[0].UserID == cats[1].UserID {
-		return fmt.Errorf("create match: %w", ErrCatsFromTheSameOwner)
-	}
+		// the cats are from different owner
+		if cats[0].UserID == cats[1].UserID {
+			return ErrCatsFromTheSameOwner
+		}
 
-	// the cats must have different gender
-	if cats[0].Sex == cats[1].Sex {
-		return fmt.Errorf("create match: %w", ErrCatsHaveSameGender)
-	}
+		// the cats must have different gender
+		if cats[0].Sex == cats[1].Sex {
+			return ErrCatsHaveSameGender
+		}
 
-	// the current user must own the user cat
-	userCat := cats[0]
-	matchCat := cats[1]
-	if strconv.Itoa(cats[1].ID) == args.UserCatID {
-		userCat = cats[1]
-		matchCat = cats[0]
-	}
-	if userCat.UserID != args.UserID {
-		return fmt.Errorf("create match: %w", ErrUserDoesNotOwnCat)
-	}
+		// the current user must own the user cat
+		userCat := cats[0]
+		matchCat := cats[1]
+		if strconv.Itoa(cats[1].ID) == args.UserCatID {
+			userCat = cats[1]
+			matchCat = cats[0]
+		}
+		if userCat.UserID != args.UserID {
+			return ErrUserDoesNotOwnCat
+		}
 
-	err = s.matchRepo.Create(ctx, createRepoArgs{
-		IssuerUserID:   userCat.UserID,
-		ReceiverUserID: matchCat.UserID,
-		IssuerCatID:    strconv.Itoa(userCat.ID),
-		ReceiverCatID:  strconv.Itoa(matchCat.ID),
-		Msg:            args.Msg,
+		err = s.matchRepo.Create(ctx, createRepoArgs{
+			IssuerUserID:   userCat.UserID,
+			ReceiverUserID: matchCat.UserID,
+			IssuerCatID:    strconv.Itoa(userCat.ID),
+			ReceiverCatID:  strconv.Itoa(matchCat.ID),
+			Msg:            args.Msg,
+		})
+		if err != nil {
+			return err
+		}
+
+		err = s.catSvc.Update(ctx, cat.UpdateArgs{
+			IDs:           []int{userCat.ID, matchCat.ID},
+			IncMatchCount: pointer.Pointer(1),
+		})
+		if err != nil {
+			return fmt.Errorf("increment cats match count: %w", err)
+		}
+
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("create match: %w", err)
-	}
-
-	err = s.catSvc.Update(ctx, cat.UpdateArgs{
-		IDs:           []int{userCat.ID, matchCat.ID},
-		IncMatchCount: pointer.Pointer(1),
-	})
-	if err != nil {
-		return fmt.Errorf("create match: increment cats match count: %w", err)
 	}
 
 	return nil
@@ -127,37 +142,47 @@ func (s Service) Approve(ctx context.Context, matchID string) error {
 		return fmt.Errorf("approve match: match id is not valid: %w", err)
 	}
 
-	matchRaw, err := s.matchRepo.GetByID(ctx, intID)
-	if err != nil {
-		return fmt.Errorf("approve match: get match by id: %w", err)
-	}
-	if matchRaw.HasBeenApprovedOrRejected {
-		return fmt.Errorf("approve match: %w", ErrMatchNotValid)
-	}
+	err = s.trx.WithTransaction(ctx, func(ctx context.Context) error {
+		matchRaw, err := s.matchRepo.GetByID(ctx, getByIDRepoArgs{
+			ID:            intID,
+			ForUpdateCats: true,
+		})
+		if err != nil {
+			return fmt.Errorf("get match by id: %w", err)
+		}
+		if matchRaw.HasBeenApprovedOrRejected {
+			return ErrMatchNotValid
+		}
 
-	err = s.matchRepo.Update(ctx, updateRepoArgs{
-		ID:                        intID,
-		HasBeenApprovedOrRejected: pointer.Pointer(true),
+		err = s.matchRepo.Update(ctx, updateRepoArgs{
+			ID:                        intID,
+			HasBeenApprovedOrRejected: pointer.Pointer(true),
+		})
+		if err != nil {
+			return fmt.Errorf("update match: %w", err)
+		}
+
+		err = s.matchRepo.Delete(ctx, deleteRepoArgs{
+			CatIDs:         []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
+			ExcludeMatchID: pointer.Pointer(matchRaw.ID),
+		})
+		if err != nil {
+			return fmt.Errorf("delete other matches: %w", err)
+		}
+
+		err = s.catSvc.Update(ctx, cat.UpdateArgs{
+			IDs:        []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
+			HasMatched: pointer.Pointer(true),
+			MatchCount: pointer.Pointer(1),
+		})
+		if err != nil {
+			return fmt.Errorf("update cats: %w", err)
+		}
+
+		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("approve match: update match: %w", err)
-	}
-
-	err = s.matchRepo.Delete(ctx, deleteRepoArgs{
-		CatIDs:         []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
-		ExcludeMatchID: pointer.Pointer(matchRaw.ID),
-	})
-	if err != nil {
-		return fmt.Errorf("approve match: delete other matches: %w", err)
-	}
-
-	err = s.catSvc.Update(ctx, cat.UpdateArgs{
-		IDs:        []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
-		HasMatched: pointer.Pointer(true),
-		MatchCount: pointer.Pointer(1),
-	})
-	if err != nil {
-		return fmt.Errorf("approve match: update cats: %w", err)
+		return fmt.Errorf("approve match: %w", err)
 	}
 
 	return nil
@@ -169,20 +194,30 @@ func (s Service) Reject(ctx context.Context, matchID string) error {
 		return fmt.Errorf("reject match: match id is not valid: %w", err)
 	}
 
-	matchRaw, err := s.matchRepo.GetByID(ctx, intID)
-	if err != nil {
-		return fmt.Errorf("reject match: get match by id: %w", err)
-	}
-	if matchRaw.HasBeenApprovedOrRejected {
-		return fmt.Errorf("reject match: %w", ErrMatchNotValid)
-	}
+	err = s.trx.WithTransaction(ctx, func(ctx context.Context) error {
+		matchRaw, err := s.matchRepo.GetByID(ctx, getByIDRepoArgs{
+			ID:            intID,
+			ForUpdateCats: true,
+		})
+		if err != nil {
+			return fmt.Errorf("get match by id: %w", err)
+		}
+		if matchRaw.HasBeenApprovedOrRejected {
+			return ErrMatchNotValid
+		}
 
-	err = s.matchRepo.Update(ctx, updateRepoArgs{
-		ID:                        intID,
-		HasBeenApprovedOrRejected: pointer.Pointer(true),
+		err = s.matchRepo.Update(ctx, updateRepoArgs{
+			ID:                        intID,
+			HasBeenApprovedOrRejected: pointer.Pointer(true),
+		})
+		if err != nil {
+			return fmt.Errorf("update matches: %w", err)
+		}
+
+		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("reject match: update matches: %w", err)
+		return fmt.Errorf("reject match: %w", err)
 	}
 
 	return nil
@@ -194,30 +229,40 @@ type DeleteArgs struct {
 }
 
 func (s Service) Delete(ctx context.Context, args DeleteArgs) error {
-	matchRaw, err := s.matchRepo.GetByID(ctx, args.MatchID)
-	if err != nil {
-		return fmt.Errorf("delete match: get match by id: %w", err)
-	}
-	if matchRaw.HasBeenApprovedOrRejected {
-		return fmt.Errorf("delete match: %w", ErrMatchNotValid)
-	}
-	if strconv.Itoa(matchRaw.IssuerUserID) != args.UserID {
-		return fmt.Errorf("delete match: %w", ErrMatchNotFound)
-	}
+	err := s.trx.WithTransaction(ctx, func(ctx context.Context) error {
+		matchRaw, err := s.matchRepo.GetByID(ctx, getByIDRepoArgs{
+			ID:            args.MatchID,
+			ForUpdateCats: true,
+		})
+		if err != nil {
+			return fmt.Errorf("get match by id: %w", err)
+		}
+		if matchRaw.HasBeenApprovedOrRejected {
+			return ErrMatchNotValid
+		}
+		if strconv.Itoa(matchRaw.IssuerUserID) != args.UserID {
+			return ErrMatchNotFound
+		}
 
-	err = s.matchRepo.Delete(ctx, deleteRepoArgs{
-		MatchID: &args.MatchID,
+		err = s.matchRepo.Delete(ctx, deleteRepoArgs{
+			MatchID: &args.MatchID,
+		})
+		if err != nil {
+			return err
+		}
+
+		err = s.catSvc.Update(ctx, cat.UpdateArgs{
+			IDs:           []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
+			IncMatchCount: pointer.Pointer(-1),
+		})
+		if err != nil {
+			return fmt.Errorf("decrement cats match count: %w", err)
+		}
+
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("delete match: %w", err)
-	}
-
-	err = s.catSvc.Update(ctx, cat.UpdateArgs{
-		IDs:           []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
-		IncMatchCount: pointer.Pointer(-1),
-	})
-	if err != nil {
-		return fmt.Errorf("delete match: decrement cats match count: %w", err)
 	}
 
 	return nil
