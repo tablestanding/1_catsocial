@@ -11,12 +11,6 @@ import (
 )
 
 type (
-	CreateUserRepoArgs struct {
-		Email          string
-		HashedPassword string
-		Name           string
-	}
-
 	SQL struct {
 		pool *pgxpool.Pool
 	}
@@ -24,6 +18,12 @@ type (
 
 func NewSQL(pool *pgxpool.Pool) SQL {
 	return SQL{pool}
+}
+
+type CreateUserRepoArgs struct {
+	Email          string
+	HashedPassword string
+	Name           string
 }
 
 func (s SQL) Create(ctx context.Context, args CreateUserRepoArgs) (string, error) {

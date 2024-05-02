@@ -12,7 +12,8 @@ type (
 	matchRepo interface {
 		Create(ctx context.Context, args CreateRepoArgs) error
 		Get(ctx context.Context, args GetRepoArgs) ([]Match, error)
-		GetById(ctx context.Context, id int) (MatchRaw, error)
+		GetByID(ctx context.Context, id int) (MatchRaw, error)
+		GetByCatID(ctx context.Context, catID int) (MatchRaw, error)
 		Update(ctx context.Context, id int, args UpdateRepoArgs) error
 		Delete(ctx context.Context, args DeleteRepoArgs) error
 	}
@@ -103,13 +104,22 @@ func (s Service) Get(ctx context.Context, args GetArgs) ([]Match, error) {
 	return matches, nil
 }
 
+func (s Service) GetByCatID(ctx context.Context, catID int) (MatchRaw, error) {
+	matches, err := s.matchRepo.GetByCatID(ctx, catID)
+	if err != nil {
+		return MatchRaw{}, fmt.Errorf("get match by cat id: %w", err)
+	}
+
+	return matches, nil
+}
+
 func (s Service) Approve(ctx context.Context, matchID string) error {
 	intID, err := strconv.Atoi(matchID)
 	if err != nil {
 		return fmt.Errorf("approve match: %w", err)
 	}
 
-	matchRaw, err := s.matchRepo.GetById(ctx, intID)
+	matchRaw, err := s.matchRepo.GetByID(ctx, intID)
 	if err != nil {
 		return fmt.Errorf("approve match: %w", err)
 	}
@@ -149,7 +159,7 @@ func (s Service) Reject(ctx context.Context, matchID string) error {
 		return fmt.Errorf("approve match: %w", err)
 	}
 
-	matchRaw, err := s.matchRepo.GetById(ctx, intID)
+	matchRaw, err := s.matchRepo.GetByID(ctx, intID)
 	if err != nil {
 		return fmt.Errorf("approve match: %w", err)
 	}
@@ -173,7 +183,7 @@ type DeleteArgs struct {
 }
 
 func (s Service) Delete(ctx context.Context, args DeleteArgs) error {
-	matchRaw, err := s.matchRepo.GetById(ctx, args.MatchID)
+	matchRaw, err := s.matchRepo.GetByID(ctx, args.MatchID)
 	if err != nil {
 		return fmt.Errorf("approve match: %w", err)
 	}

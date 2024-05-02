@@ -13,6 +13,7 @@ type (
 		ImageURLs   []string
 		HasMatched  bool
 		Name        string
+		MatchCount  int
 		CreatedAt   time.Time
 	}
 )

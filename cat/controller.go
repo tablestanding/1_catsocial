@@ -19,6 +19,8 @@ type (
 	svc interface {
 		Create(ctx context.Context, args CreateArgs) (Cat, error)
 		Search(ctx context.Context, args SearchArgs) ([]Cat, error)
+		Update(ctx context.Context, args UpdateArgs) error
+		GetOneByID(ctx context.Context, id string) (Cat, error)
 	}
 
 	Controller struct {
@@ -353,4 +355,64 @@ func (c Controller) SearchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(respBody)
+}
+
+func (c Controller) UpdateHandler(w http.ResponseWriter, r *http.Request) {
+	catID := r.PathValue("id")
+	if catID == "" {
+		http.Error(w, "cat id is empty", http.StatusBadRequest)
+		return
+	}
+
+	intCatID, err := strconv.Atoi(catID)
+	if err != nil {
+		http.Error(w, "cat id is not found", http.StatusNotFound)
+		return
+	}
+
+	reqBody, err := web.DecodeReqBody[CreateReqBody](r.Body)
+	if errors.Is(err, web.ErrInvalidReqBody) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	userID, ok := user.UserIDFromContext(r.Context())
+	if !ok || userID == "" {
+		http.Error(w, "invalid access token", http.StatusInternalServerError)
+		return
+	}
+
+	cat, err := c.s.GetOneByID(r.Context(), catID)
+	if errors.Is(err, ErrCatNotFound) {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if cat.MatchCount > 0 && reqBody.Sex != cat.Sex {
+		http.Error(w, "sex is edited when cat is already requested to match", http.StatusBadRequest)
+		return
+	}
+
+	err = c.s.Update(r.Context(), UpdateArgs{
+		IDs:         []int{intCatID},
+		Race:        &reqBody.Race,
+		Sex:         &reqBody.Sex,
+		Name:        &reqBody.Name,
+		AgeInMonth:  &reqBody.AgeInMonth,
+		Description: &reqBody.Description,
+		ImageURLs:   reqBody.ImageURLs,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

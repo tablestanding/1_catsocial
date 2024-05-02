@@ -62,6 +62,8 @@ func runServer() {
 	mux.Handle("POST /v1/cat", createCatHandler)
 	searchCatHandler := userCtrl.AuthMiddleware(http.HandlerFunc(catCtrl.SearchHandler))
 	mux.Handle("GET /v1/cat", searchCatHandler)
+	updateCatHandler := userCtrl.AuthMiddleware(http.HandlerFunc(catCtrl.UpdateHandler))
+	mux.Handle("PUT /v1/cat/{id}", updateCatHandler)
 
 	// === MATCH
 
@@ -78,7 +80,7 @@ func runServer() {
 	rejectMatchHandler := userCtrl.AuthMiddleware(http.HandlerFunc(matchCtrl.RejectHandler))
 	mux.Handle("POST /v1/cat/match/reject", rejectMatchHandler)
 	deleteMatchHandler := userCtrl.AuthMiddleware(http.HandlerFunc(matchCtrl.DeleteHandler))
-	mux.Handle("POST /v1/cat/match/delete", deleteMatchHandler)
+	mux.Handle("POST /v1/cat/match/delete/{id}", deleteMatchHandler)
 
 	// === SERVE HTTP AND GRACE SHUTDOWN
 

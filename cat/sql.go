@@ -10,36 +10,6 @@ import (
 )
 
 type (
-	CreateRepoArgs struct {
-		Race        string
-		Sex         string
-		Name        string
-		AgeInMonth  int
-		Description string
-		ImageURLs   []string
-		UserID      string
-	}
-
-	SearchRepoArgs struct {
-		ID                    *string
-		Limit                 *int
-		Offset                *int
-		Race                  *string
-		Sex                   *string
-		HasMatched            *bool
-		AgeInMonthGreaterThan *int
-		AgeInMonthLessThan    *int
-		AgeInMonth            *int
-		UserID                *string
-		ExcludeUserID         *string
-		NameQuery             *string
-	}
-
-	UpdateRepoArgs struct {
-		IDs        []int
-		HasMatched *bool
-	}
-
 	SQL struct {
 		pool *pgxpool.Pool
 	}
@@ -47,6 +17,16 @@ type (
 
 func NewSQL(pool *pgxpool.Pool) SQL {
 	return SQL{pool}
+}
+
+type CreateRepoArgs struct {
+	Race        string
+	Sex         string
+	Name        string
+	AgeInMonth  int
+	Description string
+	ImageURLs   []string
+	UserID      string
 }
 
 func (s SQL) Create(ctx context.Context, args CreateRepoArgs) (Cat, error) {
@@ -72,6 +52,21 @@ func (s SQL) Create(ctx context.Context, args CreateRepoArgs) (Cat, error) {
 	return c, nil
 }
 
+type SearchRepoArgs struct {
+	ID                    *string
+	Limit                 *int
+	Offset                *int
+	Race                  *string
+	Sex                   *string
+	HasMatched            *bool
+	AgeInMonthGreaterThan *int
+	AgeInMonthLessThan    *int
+	AgeInMonth            *int
+	UserID                *string
+	ExcludeUserID         *string
+	NameQuery             *string
+}
+
 func (s SQL) Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error) {
 	var (
 		cats         []Cat
@@ -84,7 +79,7 @@ func (s SQL) Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error) {
 
 	query.WriteString(`
 		select 
-			id, user_id, race, sex, name, age_in_month,
+			id, user_id, race, sex, name, age_in_month, match_count,
 			description, image_urls, has_matched, created_at
 		from cats
 	`)
@@ -175,7 +170,7 @@ func (s SQL) Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error) {
 	for rows.Next() {
 		var c Cat
 		err = rows.Scan(
-			&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth,
+			&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth, &c.MatchCount,
 			&c.Description, &c.ImageURLs, &c.HasMatched, &c.CreatedAt,
 		)
 		if err != nil {
@@ -195,11 +190,11 @@ func (s SQL) GetOneByID(ctx context.Context, id int) (Cat, error) {
 	var c Cat
 	err := s.pool.QueryRow(ctx, `
 		select
-			id, user_id, race, sex, name, age_in_month,
+			id, user_id, race, sex, name, age_in_month, match_count,
 			description, image_urls, has_matched, created_at
 		from cats
 		where id = $1
-	`, id).Scan(&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth,
+	`, id).Scan(&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth, &c.MatchCount,
 		&c.Description, &c.ImageURLs, &c.HasMatched, &c.CreatedAt)
 	if err != nil {
 		e := err
@@ -216,7 +211,7 @@ func (s SQL) GetByIDs(ctx context.Context, ids []int) ([]Cat, error) {
 	var cats []Cat
 	rows, err := s.pool.Query(ctx, `
 		select
-			id, user_id, race, sex, name, age_in_month,
+			id, user_id, race, sex, name, age_in_month, match_count,
 			description, image_urls, has_matched, created_at
 		from cats
 		where id = any($1)
@@ -229,7 +224,7 @@ func (s SQL) GetByIDs(ctx context.Context, ids []int) ([]Cat, error) {
 	for rows.Next() {
 		var c Cat
 		err = rows.Scan(
-			&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth,
+			&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth, &c.MatchCount,
 			&c.Description, &c.ImageURLs, &c.HasMatched, &c.CreatedAt,
 		)
 		if err != nil {
@@ -245,21 +240,87 @@ func (s SQL) GetByIDs(ctx context.Context, ids []int) ([]Cat, error) {
 	return cats, nil
 }
 
+type UpdateRepoArgs struct {
+	IDs         []int
+	HasMatched  *bool
+	Name        *string
+	Race        *string
+	Sex         *string
+	AgeInMonth  *int
+	Description *string
+	ImageURLs   []string
+}
+
 func (s SQL) Update(ctx context.Context, args UpdateRepoArgs) error {
 	var (
-		query   strings.Builder
-		sqlArgs []any
+		query         strings.Builder
+		sqlArgs       []any
+		updateQueries []string
 
 		arg = 1
 	)
-	query.WriteString("update cats set ")
+	query.WriteString("update cats")
 
 	if args.HasMatched != nil {
-		query.WriteString(fmt.Sprintf(`
+		updateQueries = append(updateQueries, fmt.Sprintf(`
 			has_matched = $%d
 		`, arg))
 		sqlArgs = append(sqlArgs, *args.HasMatched)
 		arg += 1
+	}
+
+	if args.Name != nil {
+		updateQueries = append(updateQueries, fmt.Sprintf(`
+			name = $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, *args.Name)
+		arg += 1
+	}
+
+	if args.Race != nil {
+		updateQueries = append(updateQueries, fmt.Sprintf(`
+			race = $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, *args.Race)
+		arg += 1
+	}
+
+	if args.Sex != nil {
+		updateQueries = append(updateQueries, fmt.Sprintf(`
+			sex = $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, *args.Sex)
+		arg += 1
+	}
+
+	if args.AgeInMonth != nil {
+		updateQueries = append(updateQueries, fmt.Sprintf(`
+			age_in_month = $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, *args.AgeInMonth)
+		arg += 1
+	}
+
+	if args.Description != nil {
+		updateQueries = append(updateQueries, fmt.Sprintf(`
+			description = $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, *args.Description)
+		arg += 1
+	}
+
+	if args.ImageURLs != nil && len(args.ImageURLs) > 0 {
+		updateQueries = append(updateQueries, fmt.Sprintf(`
+			image_urls = $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, args.ImageURLs)
+		arg += 1
+	}
+
+	if len(updateQueries) > 0 {
+		query.WriteString(fmt.Sprintf(`
+			set %s
+		`, strings.Join(updateQueries, ", ")))
 	}
 
 	query.WriteString(fmt.Sprintf(`

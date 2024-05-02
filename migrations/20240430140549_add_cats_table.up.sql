@@ -12,6 +12,7 @@ create table
         description text not null,
         image_urls text[] not null,
         has_matched boolean not null default false,
+        match_count int not null default 0,
         created_at timestamptz not null default now()
     );
 

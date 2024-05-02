@@ -10,28 +10,6 @@ import (
 )
 
 type (
-	CreateRepoArgs struct {
-		IssuerUserID   string
-		ReceiverUserID string
-		IssuerCatID    string
-		ReceiverCatID  string
-		Msg            string
-	}
-
-	GetRepoArgs struct {
-		UserID string
-	}
-
-	UpdateRepoArgs struct {
-		HasBeenApprovedOrRejected *bool
-	}
-
-	DeleteRepoArgs struct {
-		CatIDs         []int
-		ExcludeMatchID *int
-		MatchID        *int
-	}
-
 	SQL struct {
 		pool *pgxpool.Pool
 	}
@@ -39,6 +17,14 @@ type (
 
 func NewSQL(pool *pgxpool.Pool) SQL {
 	return SQL{pool}
+}
+
+type CreateRepoArgs struct {
+	IssuerUserID   string
+	ReceiverUserID string
+	IssuerCatID    string
+	ReceiverCatID  string
+	Msg            string
 }
 
 func (s SQL) Create(ctx context.Context, args CreateRepoArgs) error {
@@ -51,6 +37,10 @@ func (s SQL) Create(ctx context.Context, args CreateRepoArgs) error {
 	}
 
 	return err
+}
+
+type GetRepoArgs struct {
+	UserID string
 }
 
 func (s SQL) Get(ctx context.Context, args GetRepoArgs) ([]Match, error) {
@@ -152,7 +142,7 @@ func (s SQL) GetHasBeenApprovedOrRejectedById(ctx context.Context, id int) (bool
 	return b, nil
 }
 
-func (s SQL) GetById(ctx context.Context, id int) (MatchRaw, error) {
+func (s SQL) GetByID(ctx context.Context, id int) (MatchRaw, error) {
 	var m MatchRaw
 	err := s.pool.QueryRow(ctx, `
 		select 
@@ -171,6 +161,32 @@ func (s SQL) GetById(ctx context.Context, id int) (MatchRaw, error) {
 	}
 
 	return m, nil
+}
+
+func (s SQL) GetByCatID(ctx context.Context, catID int) (MatchRaw, error) {
+	var m MatchRaw
+	err := s.pool.QueryRow(ctx, `
+		select 
+			id, issuer_user_id, receiver_user_id, issuer_cat_id, receiver_cat_id,
+			has_been_approved_or_rejected, created_at, msg
+		from matches 
+		where issuer_cat_id = $1
+		or receiver_cat_id = $1
+	`, catID).Scan(&m.ID, &m.IssuerUserID, &m.ReceiverUserID, &m.IssuerCatID, &m.ReceiverCatID,
+		&m.HasBeenApprovedOrRejected, &m.CreatedAt, &m.Msg)
+	if err != nil {
+		e := err
+		if err == pgx.ErrNoRows {
+			e = ErrMatchNotFound
+		}
+		return MatchRaw{}, fmt.Errorf("sql finding match by id: %w", e)
+	}
+
+	return m, nil
+}
+
+type UpdateRepoArgs struct {
+	HasBeenApprovedOrRejected *bool
 }
 
 func (s SQL) Update(ctx context.Context, id int, args UpdateRepoArgs) error {
@@ -201,6 +217,12 @@ func (s SQL) Update(ctx context.Context, id int, args UpdateRepoArgs) error {
 	}
 
 	return nil
+}
+
+type DeleteRepoArgs struct {
+	CatIDs         []int
+	ExcludeMatchID *int
+	MatchID        *int
 }
 
 func (s SQL) Delete(ctx context.Context, args DeleteRepoArgs) error {
