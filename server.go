@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -41,7 +42,11 @@ func runServer() {
 
 	srv := &http.Server{}
 	srv.Addr = port
-	srv.Handler = mux
+
+	var h http.Handler
+	h = mux
+	h = http.TimeoutHandler(h, 60*time.Second, "timeout")
+	srv.Handler = h
 
 	// === USER
 
