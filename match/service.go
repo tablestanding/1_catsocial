@@ -43,7 +43,7 @@ type CreateArgs struct {
 func (s Service) Create(ctx context.Context, args CreateArgs) error {
 	cats, err := s.catSvc.GetByIDs(ctx, args.MatchCatID, args.UserCatID)
 	if err != nil {
-		return fmt.Errorf("create match: %w", err)
+		return fmt.Errorf("create match: get cat by ids: %w", err)
 	}
 
 	// must be 2 valid cats
@@ -88,6 +88,14 @@ func (s Service) Create(ctx context.Context, args CreateArgs) error {
 		return fmt.Errorf("create match: %w", err)
 	}
 
+	err = s.catSvc.Update(ctx, cat.UpdateArgs{
+		IDs:           []int{userCat.ID, matchCat.ID},
+		IncMatchCount: pointer.Pointer(1),
+	})
+	if err != nil {
+		return fmt.Errorf("create match: increment cats match count: %w", err)
+	}
+
 	return nil
 }
 
@@ -116,12 +124,12 @@ func (s Service) GetByCatID(ctx context.Context, catID int) (MatchRaw, error) {
 func (s Service) Approve(ctx context.Context, matchID string) error {
 	intID, err := strconv.Atoi(matchID)
 	if err != nil {
-		return fmt.Errorf("approve match: %w", err)
+		return fmt.Errorf("approve match: match id is not valid: %w", err)
 	}
 
 	matchRaw, err := s.matchRepo.GetByID(ctx, intID)
 	if err != nil {
-		return fmt.Errorf("approve match: %w", err)
+		return fmt.Errorf("approve match: get match by id: %w", err)
 	}
 	if matchRaw.HasBeenApprovedOrRejected {
 		return fmt.Errorf("approve match: %w", ErrMatchNotValid)
@@ -131,7 +139,7 @@ func (s Service) Approve(ctx context.Context, matchID string) error {
 		HasBeenApprovedOrRejected: pointer.Pointer(true),
 	})
 	if err != nil {
-		return fmt.Errorf("approve match: %w", err)
+		return fmt.Errorf("approve match: update match: %w", err)
 	}
 
 	err = s.matchRepo.Delete(ctx, DeleteRepoArgs{
@@ -139,15 +147,16 @@ func (s Service) Approve(ctx context.Context, matchID string) error {
 		ExcludeMatchID: pointer.Pointer(matchRaw.ID),
 	})
 	if err != nil {
-		return fmt.Errorf("approve match: %w", err)
+		return fmt.Errorf("approve match: delete other matches: %w", err)
 	}
 
 	err = s.catSvc.Update(ctx, cat.UpdateArgs{
 		IDs:        []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
 		HasMatched: pointer.Pointer(true),
+		MatchCount: pointer.Pointer(1),
 	})
 	if err != nil {
-		return fmt.Errorf("approve match: %w", err)
+		return fmt.Errorf("approve match: update cats: %w", err)
 	}
 
 	return nil
@@ -156,22 +165,22 @@ func (s Service) Approve(ctx context.Context, matchID string) error {
 func (s Service) Reject(ctx context.Context, matchID string) error {
 	intID, err := strconv.Atoi(matchID)
 	if err != nil {
-		return fmt.Errorf("approve match: %w", err)
+		return fmt.Errorf("reject match: match id is not valid: %w", err)
 	}
 
 	matchRaw, err := s.matchRepo.GetByID(ctx, intID)
 	if err != nil {
-		return fmt.Errorf("approve match: %w", err)
+		return fmt.Errorf("reject match: get match by id: %w", err)
 	}
 	if matchRaw.HasBeenApprovedOrRejected {
-		return fmt.Errorf("approve match: %w", ErrMatchNotValid)
+		return fmt.Errorf("reject match: %w", ErrMatchNotValid)
 	}
 
 	err = s.matchRepo.Update(ctx, intID, UpdateRepoArgs{
 		HasBeenApprovedOrRejected: pointer.Pointer(true),
 	})
 	if err != nil {
-		return fmt.Errorf("approve match: %w", err)
+		return fmt.Errorf("reject match: update matches: %w", err)
 	}
 
 	return nil
@@ -185,20 +194,28 @@ type DeleteArgs struct {
 func (s Service) Delete(ctx context.Context, args DeleteArgs) error {
 	matchRaw, err := s.matchRepo.GetByID(ctx, args.MatchID)
 	if err != nil {
-		return fmt.Errorf("approve match: %w", err)
+		return fmt.Errorf("delete match: get match by id: %w", err)
 	}
 	if matchRaw.HasBeenApprovedOrRejected {
-		return fmt.Errorf("approve match: %w", ErrMatchNotValid)
+		return fmt.Errorf("delete match: %w", ErrMatchNotValid)
 	}
 	if strconv.Itoa(matchRaw.IssuerUserID) != args.UserID {
-		return fmt.Errorf("approve match: %w", ErrMatchNotFound)
+		return fmt.Errorf("delete match: %w", ErrMatchNotFound)
 	}
 
 	err = s.matchRepo.Delete(ctx, DeleteRepoArgs{
 		MatchID: &args.MatchID,
 	})
 	if err != nil {
-		return fmt.Errorf("approve match: %w", err)
+		return fmt.Errorf("delete match: %w", err)
+	}
+
+	err = s.catSvc.Update(ctx, cat.UpdateArgs{
+		IDs:           []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
+		IncMatchCount: pointer.Pointer(-1),
+	})
+	if err != nil {
+		return fmt.Errorf("delete match: decrement cats match count: %w", err)
 	}
 
 	return nil

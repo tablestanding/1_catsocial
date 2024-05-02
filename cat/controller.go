@@ -1,6 +1,7 @@
 package cat
 
 import (
+	"catsocial/pkg/pointer"
 	"catsocial/pkg/web"
 	"catsocial/user"
 	"context"
@@ -408,6 +409,47 @@ func (c Controller) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		AgeInMonth:  &reqBody.AgeInMonth,
 		Description: &reqBody.Description,
 		ImageURLs:   reqBody.ImageURLs,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (c Controller) DeleteHandler(w http.ResponseWriter, r *http.Request) {
+	catID := r.PathValue("id")
+	if catID == "" {
+		http.Error(w, "cat id is empty", http.StatusBadRequest)
+		return
+	}
+
+	intCatID, err := strconv.Atoi(catID)
+	if err != nil {
+		http.Error(w, "cat id is not found", http.StatusNotFound)
+		return
+	}
+
+	userID, ok := user.UserIDFromContext(r.Context())
+	if !ok || userID == "" {
+		http.Error(w, "invalid access token", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = c.s.GetOneByID(r.Context(), catID)
+	if errors.Is(err, ErrCatNotFound) {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = c.s.Update(r.Context(), UpdateArgs{
+		IDs:       []int{intCatID},
+		IsDeleted: pointer.Pointer(true),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

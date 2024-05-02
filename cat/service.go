@@ -100,26 +100,32 @@ func (s Service) GetByIDs(ctx context.Context, ids ...string) ([]Cat, error) {
 }
 
 type UpdateArgs struct {
-	IDs         []int
-	HasMatched  *bool
-	Name        *string
-	Race        *string
-	Sex         *string
-	AgeInMonth  *int
-	Description *string
-	ImageURLs   []string
+	IDs           []int
+	HasMatched    *bool
+	Name          *string
+	Race          *string
+	Sex           *string
+	AgeInMonth    *int
+	Description   *string
+	ImageURLs     []string
+	IsDeleted     *bool
+	IncMatchCount *int
+	MatchCount    *int
 }
 
 func (s Service) Update(ctx context.Context, args UpdateArgs) error {
 	err := s.r.Update(ctx, UpdateRepoArgs{
-		IDs:         args.IDs,
-		HasMatched:  args.HasMatched,
-		Name:        args.Name,
-		Race:        args.Race,
-		Sex:         args.Sex,
-		AgeInMonth:  args.AgeInMonth,
-		Description: args.Description,
-		ImageURLs:   args.ImageURLs,
+		IDs:           args.IDs,
+		HasMatched:    args.HasMatched,
+		Name:          args.Name,
+		Race:          args.Race,
+		Sex:           args.Sex,
+		AgeInMonth:    args.AgeInMonth,
+		Description:   args.Description,
+		ImageURLs:     args.ImageURLs,
+		IsDeleted:     args.IsDeleted,
+		IncMatchCount: args.IncMatchCount,
+		MatchCount:    args.MatchCount,
 	})
 	if err != nil {
 		return fmt.Errorf("update cats by ids: %w", err)

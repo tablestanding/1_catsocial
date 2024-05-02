@@ -65,6 +65,7 @@ type SearchRepoArgs struct {
 	UserID                *string
 	ExcludeUserID         *string
 	NameQuery             *string
+	IncludeDeleted        bool
 }
 
 func (s SQL) Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error) {
@@ -83,6 +84,12 @@ func (s SQL) Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error) {
 			description, image_urls, has_matched, created_at
 		from cats
 	`)
+
+	if !args.IncludeDeleted {
+		whereQueries = append(whereQueries, fmt.Sprintf("is_deleted = $%d", arg))
+		sqlArgs = append(sqlArgs, false)
+		arg += 1
+	}
 
 	if args.AgeInMonth != nil {
 		whereQueries = append(whereQueries, fmt.Sprintf("age_in_month = $%d", arg))
@@ -194,6 +201,7 @@ func (s SQL) GetOneByID(ctx context.Context, id int) (Cat, error) {
 			description, image_urls, has_matched, created_at
 		from cats
 		where id = $1
+		and is_deleted = false
 	`, id).Scan(&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth, &c.MatchCount,
 		&c.Description, &c.ImageURLs, &c.HasMatched, &c.CreatedAt)
 	if err != nil {
@@ -215,6 +223,7 @@ func (s SQL) GetByIDs(ctx context.Context, ids []int) ([]Cat, error) {
 			description, image_urls, has_matched, created_at
 		from cats
 		where id = any($1)
+		and is_deleted = false
 	`, ids)
 	if err != nil {
 		return nil, fmt.Errorf("sql get cats by ids: %w", err)
@@ -241,14 +250,17 @@ func (s SQL) GetByIDs(ctx context.Context, ids []int) ([]Cat, error) {
 }
 
 type UpdateRepoArgs struct {
-	IDs         []int
-	HasMatched  *bool
-	Name        *string
-	Race        *string
-	Sex         *string
-	AgeInMonth  *int
-	Description *string
-	ImageURLs   []string
+	IDs           []int
+	HasMatched    *bool
+	Name          *string
+	Race          *string
+	Sex           *string
+	AgeInMonth    *int
+	Description   *string
+	ImageURLs     []string
+	IsDeleted     *bool
+	IncMatchCount *int
+	MatchCount    *int
 }
 
 func (s SQL) Update(ctx context.Context, args UpdateRepoArgs) error {
@@ -306,6 +318,30 @@ func (s SQL) Update(ctx context.Context, args UpdateRepoArgs) error {
 			description = $%d
 		`, arg))
 		sqlArgs = append(sqlArgs, *args.Description)
+		arg += 1
+	}
+
+	if args.IsDeleted != nil {
+		updateQueries = append(updateQueries, fmt.Sprintf(`
+			is_deleted = $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, *args.IsDeleted)
+		arg += 1
+	}
+
+	if args.IncMatchCount != nil {
+		updateQueries = append(updateQueries, fmt.Sprintf(`
+			match_count = match_count + $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, *args.IncMatchCount)
+		arg += 1
+	}
+
+	if args.MatchCount != nil {
+		updateQueries = append(updateQueries, fmt.Sprintf(`
+			match_count = $%d
+		`, arg))
+		sqlArgs = append(sqlArgs, *args.MatchCount)
 		arg += 1
 	}
 

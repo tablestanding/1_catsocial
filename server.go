@@ -64,6 +64,8 @@ func runServer() {
 	mux.Handle("GET /v1/cat", searchCatHandler)
 	updateCatHandler := userCtrl.AuthMiddleware(http.HandlerFunc(catCtrl.UpdateHandler))
 	mux.Handle("PUT /v1/cat/{id}", updateCatHandler)
+	deleteCatHandler := userCtrl.AuthMiddleware(http.HandlerFunc(catCtrl.DeleteHandler))
+	mux.Handle("DELETE /v1/cat/{id}", deleteCatHandler)
 
 	// === MATCH
 

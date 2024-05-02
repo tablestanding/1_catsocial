@@ -13,6 +13,7 @@ create table
         image_urls text[] not null,
         has_matched boolean not null default false,
         match_count int not null default 0,
+        is_deleted bool not null default false,
         created_at timestamptz not null default now()
     );
 
