@@ -14,7 +14,7 @@ type (
 		Search(ctx context.Context, args searchRepoArgs) ([]Cat, error)
 		GetOneByID(ctx context.Context, args getOneByIDRepoArgs) (Cat, error)
 		GetByIDs(ctx context.Context, args getByIDsRepoArgs) ([]Cat, error)
-		Update(ctx context.Context, args updateRepoArgs) error
+		Update(ctx context.Context, args UpdateRepoArgs) error
 	}
 
 	trx interface {
@@ -158,7 +158,7 @@ func (s Service) Update(ctx context.Context, args UpdateArgs) error {
 			}
 		}
 
-		err = s.r.Update(ctx, updateRepoArgs{
+		err = s.r.Update(ctx, UpdateRepoArgs{
 			IDs:         args.IDs,
 			Race:        args.Race,
 			Sex:         args.Sex,
@@ -193,7 +193,7 @@ func (s Service) Delete(ctx context.Context, id int) error {
 			return fmt.Errorf("get cat by id: %w", err)
 		}
 
-		err = s.r.Update(ctx, updateRepoArgs{
+		err = s.r.Update(ctx, UpdateRepoArgs{
 			IDs:       []int{id},
 			IsDeleted: pointer.Pointer(true),
 		})

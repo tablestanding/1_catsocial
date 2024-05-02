@@ -8,3 +8,40 @@ services:
       restart: always
       environment:
         POSTGRES_PASSWORD: "password"
+    otel-collector:
+      image: otel/opentelemetry-collector-contrib:0.99.0
+      restart: always
+      command: ["--config=/etc/otel-collector-config.yaml"]
+      volumes:
+        - ./.config/otelcollector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      ports:
+        - "1888:1888"   # pprof extension
+        - "8888:8888"   # Prometheus metrics exposed by the collector
+        - "8889:8889"   # Prometheus exporter metrics
+        - "13133:13133" # health_check extension
+        - "4317:4317"   # OTLP gRPC receiver
+        - "55679:55679" # zpages extension
+      depends_on:
+        - clickhouse
+    grafana:
+      image: grafana/grafana
+      container_name: grafana
+      ports:
+        - 3000:3000
+      restart: unless-stopped
+      environment:
+        - GF_SECURITY_ADMIN_USER=admin
+        - GF_SECURITY_ADMIN_PASSWORD=grafana
+      depends_on:
+        - clickhouse  
+    clickhouse:
+      image: clickhouse/clickhouse-server
+      user: "101:101"
+      container_name: clickhouse
+      hostname: clickhouse
+      volumes:
+        - ./.config/clickhouse/config.xml:/etc/clickhouse-server/config.d/config.xml
+        - ./.config/clickhouse/users.xml:/etc/clickhouse-server/users.d/users.xml
+      ports:
+        - "127.0.0.1:8123:8123"
+        - "127.0.0.1:9000:9000"

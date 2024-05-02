@@ -8,6 +8,9 @@ DB_PASSWORD ?= password
 DB_PARAMS ?= sslmode=disable
 BCRYPT_SALT ?= 8
 JWT_SECRET ?= secret
+OTEL_RESOURCE_ATTRIBUTES ?= service.name=catsocial,service.version=0.0.1
+OTEL_EXPORTER_OTLP_ENDPOINT ?= http://localhost:4317
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?= http://localhost:4317
 
 .PHONY: run
 run:

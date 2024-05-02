@@ -20,7 +20,10 @@ type (
 
 	catSvc interface {
 		GetByIDs(ctx context.Context, args cat.GetByIDsArgs) ([]cat.Cat, error)
-		Update(ctx context.Context, args cat.UpdateArgs) error
+	}
+
+	catRepo interface {
+		Update(ctx context.Context, args cat.UpdateRepoArgs) error
 	}
 
 	trx interface {
@@ -30,12 +33,13 @@ type (
 	Service struct {
 		matchRepo matchRepo
 		catSvc    catSvc
+		catRepo   catRepo
 		trx       trx
 	}
 )
 
-func NewService(matchRepo matchRepo, catSvc catSvc, trx trx) Service {
-	return Service{matchRepo: matchRepo, catSvc: catSvc, trx: trx}
+func NewService(matchRepo matchRepo, catSvc catSvc, catRepo catRepo, trx trx) Service {
+	return Service{matchRepo: matchRepo, catSvc: catSvc, trx: trx, catRepo: catRepo}
 }
 
 type CreateArgs struct {
@@ -97,7 +101,7 @@ func (s Service) Create(ctx context.Context, args CreateArgs) error {
 			return err
 		}
 
-		err = s.catSvc.Update(ctx, cat.UpdateArgs{
+		err = s.catRepo.Update(ctx, cat.UpdateRepoArgs{
 			IDs:           []int{userCat.ID, matchCat.ID},
 			IncMatchCount: pointer.Pointer(1),
 		})
@@ -170,7 +174,7 @@ func (s Service) Approve(ctx context.Context, matchID string) error {
 			return fmt.Errorf("delete other matches: %w", err)
 		}
 
-		err = s.catSvc.Update(ctx, cat.UpdateArgs{
+		err = s.catRepo.Update(ctx, cat.UpdateRepoArgs{
 			IDs:        []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
 			HasMatched: pointer.Pointer(true),
 			MatchCount: pointer.Pointer(1),
@@ -251,7 +255,7 @@ func (s Service) Delete(ctx context.Context, args DeleteArgs) error {
 			return err
 		}
 
-		err = s.catSvc.Update(ctx, cat.UpdateArgs{
+		err = s.catRepo.Update(ctx, cat.UpdateRepoArgs{
 			IDs:           []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
 			IncMatchCount: pointer.Pointer(-1),
 		})

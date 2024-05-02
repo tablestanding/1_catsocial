@@ -169,8 +169,6 @@ func (s SQL) Search(ctx context.Context, args searchRepoArgs) ([]Cat, error) {
 		arg += 1
 	}
 
-	fmt.Println(query.String())
-
 	db := s.pgxTrx.FromContext(ctx)
 	rows, err := db.Query(ctx, query.String(), sqlArgs...)
 	if err != nil {
@@ -277,7 +275,7 @@ func (s SQL) GetByIDs(ctx context.Context, args getByIDsRepoArgs) ([]Cat, error)
 	return cats, nil
 }
 
-type updateRepoArgs struct {
+type UpdateRepoArgs struct {
 	IDs           []int
 	HasMatched    *bool
 	Name          *string
@@ -291,7 +289,7 @@ type updateRepoArgs struct {
 	MatchCount    *int
 }
 
-func (s SQL) Update(ctx context.Context, args updateRepoArgs) error {
+func (s SQL) Update(ctx context.Context, args UpdateRepoArgs) error {
 	var (
 		query         strings.Builder
 		sqlArgs       []any
