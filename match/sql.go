@@ -19,7 +19,7 @@ func NewSQL(pool *pgxpool.Pool) SQL {
 	return SQL{pool}
 }
 
-type CreateRepoArgs struct {
+type createRepoArgs struct {
 	IssuerUserID   string
 	ReceiverUserID string
 	IssuerCatID    string
@@ -27,7 +27,7 @@ type CreateRepoArgs struct {
 	Msg            string
 }
 
-func (s SQL) Create(ctx context.Context, args CreateRepoArgs) error {
+func (s SQL) Create(ctx context.Context, args createRepoArgs) error {
 	_, err := s.pool.Exec(ctx, `
 		insert into matches(issuer_user_id, receiver_user_id, issuer_cat_id, receiver_cat_id, msg)
 		values ($1, $2, $3, $4, $5)
@@ -39,11 +39,11 @@ func (s SQL) Create(ctx context.Context, args CreateRepoArgs) error {
 	return err
 }
 
-type GetRepoArgs struct {
+type getRepoArgs struct {
 	UserID string
 }
 
-func (s SQL) Get(ctx context.Context, args GetRepoArgs) ([]Match, error) {
+func (s SQL) Get(ctx context.Context, args getRepoArgs) ([]Match, error) {
 	var matches []Match
 	rows, err := s.pool.Query(ctx, `
 		select
@@ -185,11 +185,12 @@ func (s SQL) GetByCatID(ctx context.Context, catID int) (MatchRaw, error) {
 	return m, nil
 }
 
-type UpdateRepoArgs struct {
+type updateRepoArgs struct {
+	ID                        int
 	HasBeenApprovedOrRejected *bool
 }
 
-func (s SQL) Update(ctx context.Context, id int, args UpdateRepoArgs) error {
+func (s SQL) Update(ctx context.Context, args updateRepoArgs) error {
 	var (
 		query   strings.Builder
 		sqlArgs []any
@@ -209,7 +210,7 @@ func (s SQL) Update(ctx context.Context, id int, args UpdateRepoArgs) error {
 	query.WriteString(fmt.Sprintf(`
 		where id = $%d
 	`, arg))
-	sqlArgs = append(sqlArgs, id)
+	sqlArgs = append(sqlArgs, args.ID)
 
 	_, err := s.pool.Exec(ctx, query.String(), sqlArgs...)
 	if err != nil {
@@ -219,13 +220,13 @@ func (s SQL) Update(ctx context.Context, id int, args UpdateRepoArgs) error {
 	return nil
 }
 
-type DeleteRepoArgs struct {
+type deleteRepoArgs struct {
 	CatIDs         []int
 	ExcludeMatchID *int
 	MatchID        *int
 }
 
-func (s SQL) Delete(ctx context.Context, args DeleteRepoArgs) error {
+func (s SQL) Delete(ctx context.Context, args deleteRepoArgs) error {
 	var (
 		query        strings.Builder
 		whereQueries []string

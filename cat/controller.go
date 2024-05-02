@@ -1,7 +1,6 @@
 package cat
 
 import (
-	"catsocial/pkg/pointer"
 	"catsocial/pkg/web"
 	"catsocial/user"
 	"context"
@@ -21,7 +20,7 @@ type (
 		Create(ctx context.Context, args CreateArgs) (Cat, error)
 		Search(ctx context.Context, args SearchArgs) ([]Cat, error)
 		Update(ctx context.Context, args UpdateArgs) error
-		GetOneByID(ctx context.Context, id string) (Cat, error)
+		Delete(ctx context.Context, id int) error
 	}
 
 	Controller struct {
@@ -387,20 +386,6 @@ func (c Controller) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cat, err := c.s.GetOneByID(r.Context(), catID)
-	if errors.Is(err, ErrCatNotFound) {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if cat.MatchCount > 0 && reqBody.Sex != cat.Sex {
-		http.Error(w, "sex is edited when cat is already requested to match", http.StatusBadRequest)
-		return
-	}
-
 	err = c.s.Update(r.Context(), UpdateArgs{
 		IDs:         []int{intCatID},
 		Race:        &reqBody.Race,
@@ -410,6 +395,14 @@ func (c Controller) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		Description: &reqBody.Description,
 		ImageURLs:   reqBody.ImageURLs,
 	})
+	if errors.Is(err, ErrCatNotFound) {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if errors.Is(err, ErrCatSexEditedAfterMatchRequested) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -437,20 +430,11 @@ func (c Controller) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = c.s.GetOneByID(r.Context(), catID)
+	err = c.s.Delete(r.Context(), intCatID)
 	if errors.Is(err, ErrCatNotFound) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = c.s.Update(r.Context(), UpdateArgs{
-		IDs:       []int{intCatID},
-		IsDeleted: pointer.Pointer(true),
-	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -1,25 +1,25 @@
 package cat
 
 import (
+	"catsocial/pkg/pgxtrx"
 	"context"
 	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type (
 	SQL struct {
-		pool *pgxpool.Pool
+		pgxTrx pgxtrx.PgxTrx
 	}
 )
 
-func NewSQL(pool *pgxpool.Pool) SQL {
-	return SQL{pool}
+func NewSQL(pgxTrx pgxtrx.PgxTrx) SQL {
+	return SQL{pgxTrx}
 }
 
-type CreateRepoArgs struct {
+type createRepoArgs struct {
 	Race        string
 	Sex         string
 	Name        string
@@ -29,7 +29,9 @@ type CreateRepoArgs struct {
 	UserID      string
 }
 
-func (s SQL) Create(ctx context.Context, args CreateRepoArgs) (Cat, error) {
+func (s SQL) Create(ctx context.Context, args createRepoArgs) (Cat, error) {
+	db := s.pgxTrx.FromContext(ctx)
+
 	c := Cat{
 		UserID:      args.UserID,
 		Race:        args.Race,
@@ -39,7 +41,7 @@ func (s SQL) Create(ctx context.Context, args CreateRepoArgs) (Cat, error) {
 		ImageURLs:   args.ImageURLs,
 		Name:        args.Name,
 	}
-	err := s.pool.QueryRow(ctx, `
+	err := db.QueryRow(ctx, `
 		insert into cats(user_id, race, sex, age_in_month, description, image_urls, name, name_normalized)
 		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		returning id, created_at, has_matched
@@ -52,7 +54,7 @@ func (s SQL) Create(ctx context.Context, args CreateRepoArgs) (Cat, error) {
 	return c, nil
 }
 
-type SearchRepoArgs struct {
+type searchRepoArgs struct {
 	ID                    *string
 	Limit                 *int
 	Offset                *int
@@ -68,7 +70,7 @@ type SearchRepoArgs struct {
 	IncludeDeleted        bool
 }
 
-func (s SQL) Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error) {
+func (s SQL) Search(ctx context.Context, args searchRepoArgs) ([]Cat, error) {
 	var (
 		cats         []Cat
 		query        strings.Builder
@@ -168,7 +170,9 @@ func (s SQL) Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error) {
 	}
 
 	fmt.Println(query.String())
-	rows, err := s.pool.Query(ctx, query.String(), sqlArgs...)
+
+	db := s.pgxTrx.FromContext(ctx)
+	rows, err := db.Query(ctx, query.String(), sqlArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("sql search cat: %w", err)
 	}
@@ -193,16 +197,28 @@ func (s SQL) Search(ctx context.Context, args SearchRepoArgs) ([]Cat, error) {
 	return cats, nil
 }
 
-func (s SQL) GetOneByID(ctx context.Context, id int) (Cat, error) {
+type getOneByIDRepoArgs struct {
+	ID        int
+	ForUpdate bool
+}
+
+func (s SQL) GetOneByID(ctx context.Context, args getOneByIDRepoArgs) (Cat, error) {
+	db := s.pgxTrx.FromContext(ctx)
+
+	forUpdate := ""
+	if args.ForUpdate {
+		forUpdate = "for update"
+	}
+
 	var c Cat
-	err := s.pool.QueryRow(ctx, `
+	err := db.QueryRow(ctx, fmt.Sprintf(`
 		select
 			id, user_id, race, sex, name, age_in_month, match_count,
 			description, image_urls, has_matched, created_at
 		from cats
 		where id = $1
-		and is_deleted = false
-	`, id).Scan(&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth, &c.MatchCount,
+		and is_deleted = false %s
+	`, forUpdate), args.ID).Scan(&c.ID, &c.UserID, &c.Race, &c.Sex, &c.Name, &c.AgeInMonth, &c.MatchCount,
 		&c.Description, &c.ImageURLs, &c.HasMatched, &c.CreatedAt)
 	if err != nil {
 		e := err
@@ -215,16 +231,28 @@ func (s SQL) GetOneByID(ctx context.Context, id int) (Cat, error) {
 	return c, nil
 }
 
-func (s SQL) GetByIDs(ctx context.Context, ids []int) ([]Cat, error) {
+type getByIDsRepoArgs struct {
+	IDs       []int
+	ForUpdate bool
+}
+
+func (s SQL) GetByIDs(ctx context.Context, args getByIDsRepoArgs) ([]Cat, error) {
+	db := s.pgxTrx.FromContext(ctx)
+
+	forUpdate := ""
+	if args.ForUpdate {
+		forUpdate = "for update"
+	}
+
 	var cats []Cat
-	rows, err := s.pool.Query(ctx, `
+	rows, err := db.Query(ctx, fmt.Sprintf(`
 		select
 			id, user_id, race, sex, name, age_in_month, match_count,
 			description, image_urls, has_matched, created_at
 		from cats
 		where id = any($1)
-		and is_deleted = false
-	`, ids)
+		and is_deleted = false %s
+	`, forUpdate), args.IDs)
 	if err != nil {
 		return nil, fmt.Errorf("sql get cats by ids: %w", err)
 	}
@@ -249,7 +277,7 @@ func (s SQL) GetByIDs(ctx context.Context, ids []int) ([]Cat, error) {
 	return cats, nil
 }
 
-type UpdateRepoArgs struct {
+type updateRepoArgs struct {
 	IDs           []int
 	HasMatched    *bool
 	Name          *string
@@ -263,7 +291,7 @@ type UpdateRepoArgs struct {
 	MatchCount    *int
 }
 
-func (s SQL) Update(ctx context.Context, args UpdateRepoArgs) error {
+func (s SQL) Update(ctx context.Context, args updateRepoArgs) error {
 	var (
 		query         strings.Builder
 		sqlArgs       []any
@@ -364,7 +392,8 @@ func (s SQL) Update(ctx context.Context, args UpdateRepoArgs) error {
 	`, arg))
 	sqlArgs = append(sqlArgs, args.IDs)
 
-	_, err := s.pool.Exec(ctx, query.String(), sqlArgs...)
+	db := s.pgxTrx.FromContext(ctx)
+	_, err := db.Exec(ctx, query.String(), sqlArgs...)
 	if err != nil {
 		return fmt.Errorf("sql update cats by ids: %w", err)
 	}

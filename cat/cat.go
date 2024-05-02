@@ -14,6 +14,7 @@ type (
 		HasMatched  bool
 		Name        string
 		MatchCount  int
+		IsDeleted   bool
 		CreatedAt   time.Time
 	}
 )

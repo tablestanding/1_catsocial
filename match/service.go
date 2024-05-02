@@ -10,12 +10,12 @@ import (
 
 type (
 	matchRepo interface {
-		Create(ctx context.Context, args CreateRepoArgs) error
-		Get(ctx context.Context, args GetRepoArgs) ([]Match, error)
+		Create(ctx context.Context, args createRepoArgs) error
+		Get(ctx context.Context, args getRepoArgs) ([]Match, error)
 		GetByID(ctx context.Context, id int) (MatchRaw, error)
 		GetByCatID(ctx context.Context, catID int) (MatchRaw, error)
-		Update(ctx context.Context, id int, args UpdateRepoArgs) error
-		Delete(ctx context.Context, args DeleteRepoArgs) error
+		Update(ctx context.Context, args updateRepoArgs) error
+		Delete(ctx context.Context, args deleteRepoArgs) error
 	}
 
 	catSvc interface {
@@ -77,7 +77,7 @@ func (s Service) Create(ctx context.Context, args CreateArgs) error {
 		return fmt.Errorf("create match: %w", ErrUserDoesNotOwnCat)
 	}
 
-	err = s.matchRepo.Create(ctx, CreateRepoArgs{
+	err = s.matchRepo.Create(ctx, createRepoArgs{
 		IssuerUserID:   userCat.UserID,
 		ReceiverUserID: matchCat.UserID,
 		IssuerCatID:    strconv.Itoa(userCat.ID),
@@ -104,7 +104,7 @@ type GetArgs struct {
 }
 
 func (s Service) Get(ctx context.Context, args GetArgs) ([]Match, error) {
-	matches, err := s.matchRepo.Get(ctx, GetRepoArgs{UserID: args.UserID})
+	matches, err := s.matchRepo.Get(ctx, getRepoArgs{UserID: args.UserID})
 	if err != nil {
 		return nil, fmt.Errorf("get match: %w", err)
 	}
@@ -135,14 +135,15 @@ func (s Service) Approve(ctx context.Context, matchID string) error {
 		return fmt.Errorf("approve match: %w", ErrMatchNotValid)
 	}
 
-	err = s.matchRepo.Update(ctx, intID, UpdateRepoArgs{
+	err = s.matchRepo.Update(ctx, updateRepoArgs{
+		ID:                        intID,
 		HasBeenApprovedOrRejected: pointer.Pointer(true),
 	})
 	if err != nil {
 		return fmt.Errorf("approve match: update match: %w", err)
 	}
 
-	err = s.matchRepo.Delete(ctx, DeleteRepoArgs{
+	err = s.matchRepo.Delete(ctx, deleteRepoArgs{
 		CatIDs:         []int{matchRaw.IssuerCatID, matchRaw.ReceiverCatID},
 		ExcludeMatchID: pointer.Pointer(matchRaw.ID),
 	})
@@ -176,7 +177,8 @@ func (s Service) Reject(ctx context.Context, matchID string) error {
 		return fmt.Errorf("reject match: %w", ErrMatchNotValid)
 	}
 
-	err = s.matchRepo.Update(ctx, intID, UpdateRepoArgs{
+	err = s.matchRepo.Update(ctx, updateRepoArgs{
+		ID:                        intID,
 		HasBeenApprovedOrRejected: pointer.Pointer(true),
 	})
 	if err != nil {
@@ -203,7 +205,7 @@ func (s Service) Delete(ctx context.Context, args DeleteArgs) error {
 		return fmt.Errorf("delete match: %w", ErrMatchNotFound)
 	}
 
-	err = s.matchRepo.Delete(ctx, DeleteRepoArgs{
+	err = s.matchRepo.Delete(ctx, deleteRepoArgs{
 		MatchID: &args.MatchID,
 	})
 	if err != nil {
