@@ -248,7 +248,7 @@ func (s SearchQueries) AgeInMonth() *int {
 	if s.ageInMonth == "" {
 		return nil
 	}
-	a, err := strconv.Atoi(s.ageInMonth)
+	a, err := strconv.Atoi(strings.TrimPrefix(s.ageInMonth, "="))
 	if err != nil {
 		return nil
 	}
@@ -325,6 +325,7 @@ func (c Controller) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		AgeInMonthLessThan:    sq.AgeInMonthLessThan(),
 		AgeInMonth:            sq.AgeInMonth(),
 		UserID:                sq.UserID(userID),
+		ExcludeUserID:         sq.ExcludeUserID(userID),
 		NameQuery:             sq.NameQuery(),
 	})
 	if err != nil {

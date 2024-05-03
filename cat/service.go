@@ -64,6 +64,7 @@ type SearchArgs struct {
 	AgeInMonthLessThan    *int
 	AgeInMonth            *int
 	UserID                *string
+	ExcludeUserID         *string
 	NameQuery             *string
 }
 
@@ -79,6 +80,7 @@ func (s Service) Search(ctx context.Context, args SearchArgs) ([]Cat, error) {
 		AgeInMonthLessThan:    args.AgeInMonthLessThan,
 		AgeInMonth:            args.AgeInMonth,
 		UserID:                args.UserID,
+		ExcludeUserID:         args.ExcludeUserID,
 		NameQuery:             args.NameQuery,
 	})
 }

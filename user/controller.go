@@ -110,11 +110,13 @@ func (c Controller) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		AccessToken: token,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(web.NewResTemplate("User registered successfully", resp))
+	respBody, err := json.Marshal(web.NewResTemplate("User registered successfully", resp))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("decoding user into json: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
+	w.WriteHeader(http.StatusCreated)
+	w.Write(respBody)
 }
 
 type LoginReqBody struct {

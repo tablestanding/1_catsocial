@@ -43,9 +43,9 @@ func (s SQL) Create(ctx context.Context, args createRepoArgs) (Cat, error) {
 	}
 	err := db.QueryRow(ctx, `
 		insert into cats(user_id, race, sex, age_in_month, description, image_urls, name, name_normalized)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		values ($1, $2, $3, $4, $5, $6, $7, lower($7))
 		returning id, created_at, has_matched
-	`, args.UserID, args.Race, args.Sex, args.AgeInMonth, args.Description, args.ImageURLs, args.Name, strings.ToLower(args.Name)).
+	`, args.UserID, args.Race, args.Sex, args.AgeInMonth, args.Description, args.ImageURLs, args.Name).
 		Scan(&c.ID, &c.CreatedAt, &c.HasMatched)
 	if err != nil {
 		return c, fmt.Errorf("sql create cat: %w", err)
@@ -309,8 +309,8 @@ func (s SQL) Update(ctx context.Context, args UpdateRepoArgs) error {
 
 	if args.Name != nil {
 		updateQueries = append(updateQueries, fmt.Sprintf(`
-			name = $%d
-		`, arg))
+			name = $%d, name_normalized = lower($%d)
+		`, arg, arg))
 		sqlArgs = append(sqlArgs, *args.Name)
 		arg += 1
 	}
