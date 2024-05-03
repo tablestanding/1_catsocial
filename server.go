@@ -44,7 +44,7 @@ func runServer() {
 	pgxTrx := pgxtrx.New(dbPool)
 
 	// === ENV VAR
-	port := ":" + cmp.Or(os.Getenv("PORT"), "5781")
+	port := ":" + cmp.Or(os.Getenv("PORT"), "8080")
 
 	saltCountString := env.MustLoad("BCRYPT_SALT")
 	saltCount, err := strconv.Atoi(saltCountString)
@@ -114,7 +114,7 @@ func runServer() {
 	rejectMatchHandler := userCtrl.AuthMiddleware(http.HandlerFunc(matchCtrl.RejectHandler))
 	handleFunc("POST /v1/cat/match/reject", rejectMatchHandler)
 	deleteMatchHandler := userCtrl.AuthMiddleware(http.HandlerFunc(matchCtrl.DeleteHandler))
-	handleFunc("POST /v1/cat/match/delete/{id}", deleteMatchHandler)
+	handleFunc("DELETE /v1/cat/match/{id}", deleteMatchHandler)
 
 	// === SERVE HTTP AND GRACE SHUTDOWN
 	go func() {
@@ -147,6 +147,7 @@ func initDB(ctx context.Context) *pgxpool.Pool {
 	}
 
 	cfg.ConnConfig.Tracer = otelpgx.NewTracer()
+	cfg.MaxConns = 70
 
 	dbpool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

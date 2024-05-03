@@ -175,8 +175,8 @@ func (s SQL) GetByID(ctx context.Context, args getByIDRepoArgs) (MatchRaw, error
 					on m.issuer_cat_id = issuer_cat.id
 				inner join cats receiver_cat
 					on m.receiver_cat_id = receiver_cat.id
-			where id = $1
-			for update on issuer_cat, receiver_cat
+			where m.id = $1
+			for update of issuer_cat, receiver_cat
 		`
 	}
 

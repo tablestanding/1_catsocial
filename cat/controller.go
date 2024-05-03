@@ -1,6 +1,7 @@
 package cat
 
 import (
+	"catsocial/pkg/pointer"
 	"catsocial/pkg/web"
 	"catsocial/user"
 	"context"
@@ -157,7 +158,7 @@ func (s SearchQueries) ID() *string {
 
 func (s SearchQueries) Limit() *int {
 	if s.limit == "" {
-		return nil
+		return pointer.Pointer(10)
 	}
 
 	l, err := strconv.Atoi(s.limit)
@@ -192,13 +193,13 @@ func (s SearchQueries) Race() *string {
 }
 
 func (s SearchQueries) Sex() *string {
-	if s.race == "" {
+	if s.sex == "" {
 		return nil
 	}
-	if s.race != "male" && s.race != "female" {
+	if s.sex != "male" && s.sex != "female" {
 		return nil
 	}
-	return &s.race
+	return &s.sex
 }
 
 func (s SearchQueries) HasMatched() *bool {
@@ -343,7 +344,7 @@ func (c Controller) SearchHandler(w http.ResponseWriter, r *http.Request) {
 			AgeInMonth:  c.AgeInMonth,
 			ImageURLs:   c.ImageURLs,
 			Description: c.Description,
-			HasMatched:  c.HasMatched,
+			HasMatched:  c.HasMatched || c.MatchCount > 0,
 			CreatedAt:   c.CreatedAt.Format(time.RFC3339),
 		})
 	}

@@ -12,6 +12,8 @@ drop index if exists idx_cats_age_in_month;
 
 drop index if exists idx_cats_name_normalized;
 
+drop index if exists idx_cats_is_deleted;
+
 drop table if exists cats;
 
 commit;

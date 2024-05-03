@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -63,9 +62,7 @@ func newTraceProvider(ctx context.Context) (*trace.TracerProvider, error) {
 	}
 
 	traceProvider := trace.NewTracerProvider(
-		trace.WithBatcher(exp,
-			// Default is 5s. Set to 1s for demonstrative purposes.
-			trace.WithBatchTimeout(time.Second)),
+		trace.WithBatcher(exp),
 	)
 	return traceProvider, nil
 }

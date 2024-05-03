@@ -27,6 +27,8 @@ create index if not exists idx_cats_race on cats (race);
 
 create index if not exists idx_cats_age_in_month on cats (age_in_month);
 
+create index if not exists idx_cats_age_is_deleted on cats (is_deleted);
+
 create extension if not exists pg_trgm;
 
 create index if not exists idx_cats_name_normalized on cats using gin(name_normalized gin_trgm_ops);

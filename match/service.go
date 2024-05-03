@@ -65,7 +65,7 @@ func (s Service) Create(ctx context.Context, args CreateArgs) error {
 		}
 
 		// both cats must have not been matched
-		if cats[0].HasMatched || cats[1].HasMatched {
+		if cats[0].HasMatched || cats[1].HasMatched || cats[0].MatchCount > 0 || cats[1].MatchCount > 0 {
 			return ErrCatHasBeenMatched
 		}
 

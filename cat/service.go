@@ -112,7 +112,7 @@ func (s Service) GetByIDs(ctx context.Context, args GetByIDsArgs) ([]Cat, error)
 	for _, id := range args.IDs {
 		i, err := strconv.Atoi(id)
 		if err != nil {
-			return nil, fmt.Errorf("get cat by ids: %w", err)
+			return nil, fmt.Errorf("get cat by ids: invalid id: %w", ErrCatNotFound)
 		}
 
 		intIds = append(intIds, i)

@@ -12,6 +12,14 @@ OTEL_RESOURCE_ATTRIBUTES ?= service.name=catsocial,service.version=0.0.1
 OTEL_EXPORTER_OTLP_ENDPOINT ?= http://localhost:4317
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?= http://localhost:4317
 
+.PHONY: build
+build:
+	GOOS=linux GOARCH=amd64 go build -o main .
+
+.PHONY: main
+main:
+	./main
+
 .PHONY: run
 run:
 	@go run .

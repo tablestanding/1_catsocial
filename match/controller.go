@@ -48,18 +48,6 @@ func (c CreateReqBody) Validate() bool {
 		return false
 	}
 
-	// match cat id must be valid id
-	_, err := strconv.Atoi(c.MatchCatID)
-	if err != nil {
-		return false
-	}
-
-	// user cat id must be valid id
-	_, err = strconv.Atoi(c.UserCatID)
-	if err != nil {
-		return false
-	}
-
 	return true
 }
 

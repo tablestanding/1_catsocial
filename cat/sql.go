@@ -107,11 +107,18 @@ func (s SQL) Search(ctx context.Context, args searchRepoArgs) ([]Cat, error) {
 		arg += 1
 	}
 
-	if args.HasMatched != nil {
-		whereQueries = append(whereQueries, fmt.Sprintf("has_matched = $%d", arg))
-		sqlArgs = append(sqlArgs, *args.HasMatched)
-		arg += 1
+	if args.HasMatched != nil && *args.HasMatched {
+		whereQueries = append(whereQueries, `
+			has_matched = true
+			or match_count > 0
+		`)
+	} else if args.HasMatched != nil && !*args.HasMatched {
+		whereQueries = append(whereQueries, `
+			has_matched = false
+			and match_count <= 0
+		`)
 	}
+
 	if args.ID != nil {
 		whereQueries = append(whereQueries, fmt.Sprintf("id = $%d", arg))
 		sqlArgs = append(sqlArgs, *args.ID)
@@ -299,12 +306,16 @@ func (s SQL) Update(ctx context.Context, args UpdateRepoArgs) error {
 	)
 	query.WriteString("update cats")
 
-	if args.HasMatched != nil {
-		updateQueries = append(updateQueries, fmt.Sprintf(`
-			has_matched = $%d
-		`, arg))
-		sqlArgs = append(sqlArgs, *args.HasMatched)
-		arg += 1
+	if args.HasMatched != nil && *args.HasMatched {
+		updateQueries = append(updateQueries, `
+			has_matched = true
+			or match_count > 0
+		`)
+	} else if args.HasMatched != nil && !*args.HasMatched {
+		updateQueries = append(updateQueries, `
+			has_matched = false
+			and match_count <= 0
+		`)
 	}
 
 	if args.Name != nil {
